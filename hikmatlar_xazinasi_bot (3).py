@@ -644,21 +644,19 @@ def broad_send(message):
         )
 
     except Exception:
-        bot.send_message(
-            message.chat.id,
-            "❌ Xatolik",
-            reply_markup=admin_keyboard() 
+    bot.send_message(
+        message.chat.id,
+        "❌ Xatolik",
+        reply_markup=admin_keyboard()
+    )
 
-            bot.send_message(
-            message.chat.id,
-            "Admin paneli:",
-            reply_markup=admin_keyboard()
-        )
+    bot.send_message(
+        message.chat.id,
+        "Admin paneli:",
+        reply_markup=admin_keyboard()
+    )
 
-    except Exception:
-        bot.send_message(message.chat.id, "❌ Xato")
-
-
+            
 @bot.message_handler(func=lambda m: m.text == "📚 Saqlangan hikmatlar")
 def show_archive(message):
     markup = types.InlineKeyboardMarkup()
