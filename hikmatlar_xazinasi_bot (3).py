@@ -352,48 +352,62 @@ def show_stats(message):
     if message.from_user.id != ADMIN_ID:
         return
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute("SELECT COUNT(*) FROM users")
-total_users = cursor.fetchone()[0]
+    
+conn = get_db_connection()
+cursor = conn.cursor()
 
-cursor.execute("SELECT COUNT(*) FROM hikmatlar")
-total_h = cursor.fetchone()[0]
+try:
+    # 👥 Foydalanuvchilar soni
+    cursor.execute("SELECT COUNT(*) FROM users")
+    total_users = cursor.fetchone()[0]
 
-cursor.execute("SELECT COUNT(*) FROM hikmatlar WHERE is_posted_to_channel = 0")
-navbat = cursor.fetchone()[0]
+    # 📚 Jami hikmatlar
+    cursor.execute("SELECT COUNT(*) FROM hikmatlar")
+    total_h = cursor.fetchone()[0]
 
-cursor.execute("SELECT COUNT(*) FROM hikmatlar WHERE is_posted_to_channel = 1")
-arxiv = cursor.fetchone()[0]
+    # ⌛ Navbatdagi hikmatlar
+    cursor.execute("SELECT COUNT(*) FROM hikmatlar WHERE is_posted_to_channel = 0")
+    navbat = cursor.fetchone()[0]
 
-        stats_text = (
-    f"📊 <b>Statistika:</b>\n\n"
-    f"👥 <b>Azolar:</b> {total_users}\n"
-    f"📚 <b>Jami hikmat:</b> {total_h} ta\n"
-    f"⌛ <b>Navbatda:</b> {navbat} ta\n"
-    f"📦 <b>Arxivda:</b> {arxiv} ta\n\n"
-    f"👤 <b>Oxirgi 15 foydalanuvchi:</b>\n"
-        )
+    # 📦 Arxiv (kanalga ketganlar)
+    cursor.execute("SELECT COUNT(*) FROM hikmatlar WHERE is_posted_to_channel = 1")
+    arxiv = cursor.fetchone()[0]
 
-        for u_id, name, uname in last_users:
-    display_name = name if name else "Ismsiz"
-    username = uname if uname and uname != "Usernamesiz" else ""
+    # 👤 Oxirgi 15 user
+    cursor.execute("""
+        SELECT user_id, first_name, username 
+        FROM users 
+        ORDER BY user_id DESC 
+        LIMIT 15
+    """)
+    last_users = cursor.fetchall()
 
-    if username:
-        stats_text += f"🔹 <code>{u_id}</code> | {display_name} ({username})\n"
-    else:
-        stats_text += f"🔹 <code>{u_id}</code> | {display_name}\n"
+    # 📊 Matn
+    stats_text = (
+        "📊 Statistika:\n\n"
+        f"👥 Azolar: {total_users}\n"
+        f"📚 Jami hikmat: {total_h}\n"
+        f"⌛ Navbatda: {navbat}\n"
+        f"📦 Arxivda: {arxiv}\n\n"
+        "👤 Oxirgi 15 foydalanuvchi:\n"
+    )
 
-        bot.send_message(message.chat.id, stats_text, parse_mode="HTML")
+    # 👇 Userlarni qo‘shish
+    for u_id, name, uname in last_users:
+        display_name = name if name else "Ismsiz"
+        username = f"@{uname}" if uname and uname != "Usernamesiz" else ""
 
-    except Exception as e:
-        bot.send_message(message.chat.id, f"❌ Xato: {e}")
-    finally:
-        cursor.close()
-        conn.close()
+        stats_text += f"🔹 {u_id} | {display_name} {username}\n"
 
+    # 📤 Yuborish
+    bot.send_message(message.chat.id, stats_text)
 
+except Exception as e:
+    bot.send_message(message.chat.id, f"❌ Xato: {e}")
+
+finally:
+    cursor.close()
+    conn.close()
            
 @bot.message_handler(func=lambda m: m.text == "📝 Navbatni boshqarish" and m.from_user.id == ADMIN_ID)
 def manage_queue(message):
