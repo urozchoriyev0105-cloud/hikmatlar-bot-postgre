@@ -486,12 +486,15 @@ def save_h(message):
 
 @bot.message_handler(func=lambda m: m.text == "📁 Bazani yuklab olish")
 def send_db_file_button(message):
-    if str(message.from_user.id) == str(ADMIN_ID):
-        try:
-            import csv
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            
+    user_id = message.from_user.id
+
+    if str(user_id) != str(ADMIN_ID):
+        return
+
+    try:
+        import csv
+        conn = get_db_connection()
+        cursor = conn.cursor()   
             file_name = f"backup_{datetime.now().strftime('%Y%m%d')}.csv"
 
             with open(file_name, "w", newline='', encoding='utf-8') as f:
