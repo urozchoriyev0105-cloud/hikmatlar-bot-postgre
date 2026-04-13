@@ -284,7 +284,15 @@ def back_to_main(message):
 # --- START VA OBUNA ---
 @bot.message_handler(commands=['start'])
 def start(message):
-    user_id = message.from_user.id
+    user_id = message.from_user.id 
+    # ✅ USERNI DB GA YOZISH
+    add_user_to_db(
+        user_id,
+        message.from_user.first_name,
+        f"@{message.from_user.username}" if message.from_user.username else "Usernamesiz",
+        None  # telefon keyin olinadi
+    )
+
 
     if not is_subscribed(user_id):
         markup = types.InlineKeyboardMarkup()
