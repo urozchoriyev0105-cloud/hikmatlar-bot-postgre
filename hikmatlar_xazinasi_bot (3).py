@@ -348,66 +348,7 @@ def restricted_access(message):
 
 
 @bot.message_handler(func=lambda m: m.text == "📊 Statistika")
-def show_stats(message):
-    if message.from_user.id != ADMIN_ID:
-        return
 
-    
-conn = get_db_connection()
-cursor = conn.cursor()
-
-try:
-    # 👥 Foydalanuvchilar soni
-    cursor.execute("SELECT COUNT(*) FROM users")
-    total_users = cursor.fetchone()[0]
-
-    # 📚 Jami hikmatlar
-    cursor.execute("SELECT COUNT(*) FROM hikmatlar")
-    total_h = cursor.fetchone()[0]
-
-    # ⌛ Navbatdagi hikmatlar
-    cursor.execute("SELECT COUNT(*) FROM hikmatlar WHERE is_posted_to_channel = 0")
-    navbat = cursor.fetchone()[0]
-
-    # 📦 Arxiv (kanalga ketganlar)
-    cursor.execute("SELECT COUNT(*) FROM hikmatlar WHERE is_posted_to_channel = 1")
-    arxiv = cursor.fetchone()[0]
-
-    # 👤 Oxirgi 15 user
-    cursor.execute("""
-        SELECT user_id, first_name, username 
-        FROM users 
-        ORDER BY user_id DESC 
-        LIMIT 15
-    """)
-    last_users = cursor.fetchall()
-
-    # 📊 Matn
-    stats_text = (
-        "📊 Statistika:\n\n"
-        f"👥 Azolar: {total_users}\n"
-        f"📚 Jami hikmat: {total_h}\n"
-        f"⌛ Navbatda: {navbat}\n"
-        f"📦 Arxivda: {arxiv}\n\n"
-        "👤 Oxirgi 15 foydalanuvchi:\n"
-    )
-
-    # 👇 Userlarni qo‘shish
-    for u_id, name, uname in last_users:
-        display_name = name if name else "Ismsiz"
-        username = f"@{uname}" if uname and uname != "Usernamesiz" else ""
-
-        stats_text += f"🔹 {u_id} | {display_name} {username}\n"
-
-    # 📤 Yuborish
-    bot.send_message(message.chat.id, stats_text)
-
-except Exception as e:
-    bot.send_message(message.chat.id, f"❌ Xato: {e}")
-
-finally:
-    cursor.close()
-    conn.close()
            
 @bot.message_handler(func=lambda m: m.text == "📝 Navbatni boshqarish" and m.from_user.id == ADMIN_ID)
 def manage_queue(message):
@@ -446,7 +387,78 @@ def manage_queue(message):
 
     except Exception as e:
         bot.send_message(message.chat.id, f"❌ Xatolik: {e}")
+@bot.message_handler(func=lambda m: m.text == "📊 Statistika")
+def show_stats(message):
+    if message.from_user.id != ADMIN_ID:
+        return
 
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # 👥 Jami user
+        cursor.execute("SELECT COUNT(*) FROM users")
+        total_users = cursor.fetchone()[0]
+
+        # 📚 Hikmatlar
+        cursor.execute("SELECT COUNT(*) FROM hikmatlar")
+        total_h = cursor.fetchone()[0]
+
+        # ⌛ Navbat
+        cursor.execute("SELECT COUNT(*) FROM hikmatlar WHERE is_posted_to_channel = 0")
+        navbat = cursor.fetchone()[0]
+
+        # 📦 Arxiv
+        cursor.execute("SELECT COUNT(*) FROM hikmatlar WHERE is_posted_to_channel = 1")
+        arxiv = cursor.fetchone()[0]
+
+        # 🏆 TOP 10 (daily)
+        cursor.execute("""
+            SELECT first_name, username, daily_count 
+            FROM users 
+            ORDER BY daily_count DESC 
+            LIMIT 10
+        """)
+        top_daily = cursor.fetchall()
+
+        # 🎯 TOP 10 (random)
+        cursor.execute("""
+            SELECT first_name, username, random_count 
+            FROM users 
+            ORDER BY random_count DESC 
+            LIMIT 10
+        """)
+        top_random = cursor.fetchall()
+
+        conn.close()
+
+        text = f"""
+📊 <b>Statistika</b>
+
+👥 Azolar: <b>{total_users}</b>
+📚 Hikmatlar: <b>{total_h}</b>
+⌛ Navbat: <b>{navbat}</b>
+📦 Arxiv: <b>{arxiv}</b>
+
+🏆 <b>TOP 10 (kunlik hikmat):</b>
+"""
+
+        # TOP daily
+        for i, (name, uname, count) in enumerate(top_daily, 1):
+            username = f"@{uname}" if uname else ""
+            text += f"\n{i}. {name} {username} — {count}"
+
+        text += "\n\n🎯 <b>TOP 10 (tasodifiy hikmat):</b>\n"
+
+        # TOP random
+        for i, (name, uname, count) in enumerate(top_random, 1):
+            username = f"@{uname}" if uname else ""
+            text += f"\n{i}. {name} {username} — {count}"
+
+        bot.send_message(message.chat.id, text, parse_mode="HTML")
+
+    except Exception as e:
+        bot.send_message(message.chat.id, f"❌ Xato: {e}")
 
 # --- O‘CHIRISH ---
 @bot.callback_query_handler(func=lambda call: call.data.startswith("sql_del_"))
