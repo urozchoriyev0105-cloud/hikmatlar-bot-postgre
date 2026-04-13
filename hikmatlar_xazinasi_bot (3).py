@@ -486,40 +486,95 @@ def save_h(message):
 
 @bot.message_handler(func=lambda m: m.text == "📁 Bazani yuklab olish")
 def send_db_file_button(message):
-    # .env dan olingan ADMIN_ID bilan tekshirish
     if str(message.from_user.id) == str(ADMIN_ID):
         try:
             import csv
             conn = get_db_connection()
             cursor = conn.cursor()
             
-            # 1. Foydalanuvchilar bazasini CSV ga yozish
-            cursor.execute("SELECT * FROM users")
-            rows = cursor.fetchall()
-            
-            file_name = "users_backup.csv"
+            file_name = f"backup_{datetime.now().strftime('%Y%m%d')}.csv"
+
             with open(file_name, "w", newline='', encoding='utf-8') as f:
                 writer = csv.writer(f)
-                writer.writerow([i[0] for i in cursor.description]) # Ustun nomlari
-                writer.writerows(rows)
-            
-            # 2. Faylni yuborish
+
+                # USERS
+                writer.writerow(['TABLE', 'user_id', 'time1', 'last_sent_index'])
+                cursor.execute("SELECT user_id, time1, last_sent_index FROM users")
+                for row in cursor.fetchall():
+                    writer.writerow(['users', *row])
+
+                # HIKMATLAR
+                writer.writerow(['TABLE', 'id', 'secret_id', 'is_posted_to_channel', 'public_id'])
+                cursor.execute("SELECT id, secret_id, is_posted_to_channel, public_id FROM hikmatlar")
+                for row in cursor.fetchall():
+                    writer.writerow(['hikmatlar', *row])
+
             with open(file_name, "rb") as doc:
-                bot.send_document(
-                    message.chat.id, 
-                    doc, 
-                    caption=f"📁 Baza backup (CSV format)\n⏰ Vaqt: {datetime.now().strftime('%H:%M:%S')}"
-                )
-            
+                bot.send_document(message.chat.id, doc, caption="🚀 TO‘LIQ BACKUP")
+
             cursor.close()
             conn.close()
-            os.remove(file_name) # Vaqtinchalik faylni o'chirish
-            
-        except Exception as e:
-            bot.send_message(message.chat.id, f"❌ Faylni yuborishda xato: {e}")
-    else:
-        bot.send_message(message.chat.id, "⛔️ Bu tugma faqat admin uchun!")
+            os.remove(file_name)
 
+        except Exception as e:
+            bot.send_message(message.chat.id, f"❌ Xato: {e}")
+
+@bot.message_handler(content_types=['document'])
+def handle_restore(message):
+    if str(message.from_user.id) == str(ADMIN_ID):
+        if message.document.file_name.endswith('.csv'):
+            try:
+                file_info = bot.get_file(message.document.file_id)
+                downloaded_file = bot.download_file(file_info.file_path)
+
+                with open("temp_restore.csv", 'wb') as f:
+                    f.write(downloaded_file)
+
+                import csv
+                conn = get_db_connection()
+                cursor = conn.cursor()
+
+                with open("temp_restore.csv", 'r', encoding='utf-8') as f:
+                    reader = csv.reader(f)
+                    next(reader)
+
+                    for row in reader:
+                        if row[0] == 'users':
+                            cursor.execute("""
+                                INSERT INTO users (user_id, time1, last_sent_index)
+                                VALUES (%s, %s, %s)
+                                ON CONFLICT (user_id) DO UPDATE
+                                SET time1 = EXCLUDED.time1,
+                                    last_sent_index = EXCLUDED.last_sent_index
+                            """, (
+                                int(row[1]),
+                                row[2],
+                                int(row[3])
+                            ))
+
+                        elif row[0] == 'hikmatlar':
+                            cursor.execute("""
+                                INSERT INTO hikmatlar (id, secret_id, is_posted_to_channel, public_id)
+                                VALUES (%s, %s, %s, %s)
+                                ON CONFLICT (id) DO UPDATE
+                                SET is_posted_to_channel = EXCLUDED.is_posted_to_channel,
+                                    public_id = EXCLUDED.public_id
+                            """, (
+                                int(row[1]),
+                                int(row[2]),
+                                int(row[3]),
+                                int(row[4]) if row[4] else None
+                            ))
+
+                conn.commit()
+                cursor.close()
+                conn.close()
+                os.remove("temp_restore.csv")
+
+                bot.reply_to(message, "✅ TO‘LIQ tiklandi!")
+
+            except Exception as e:
+                bot.reply_to(message, f"❌ Xato: {e}")
 
 
 
@@ -877,8 +932,7 @@ def handle_random_hikmat_callback(call):
             # ✅ 5. KO‘RILGAN HIKMATNI YOZISH (MUHIM!)
             cursor.execute(
                 "INSERT OR IGNORE INTO seen_hikmatlar (user_id, hikmat_id) VALUES (%s, %s)",
-                (user_id, hikmat_id)
-            )
+                 (user_id, hikmat_id)
 
             conn.commit()
 
@@ -922,78 +976,115 @@ def smart_timer():
             conn = get_db_connection()
             cursor = conn.cursor()
 
-            # 🟢 1. USERLARNI RO'YXATINI OLISH
-            # Bazani loop ichida qayta-qayta qiynamaslik uchun hammasini birdan olamiz
             cursor.execute("SELECT user_id, time1, last_sent_index FROM users")
             users = cursor.fetchall()
 
-            # Telegram limitini boshqarish uchun counter
             msg_counter = 0
 
             for u_id, u_time, last_idx in users:
                 try:
-                    # 🆕 YANGI USER (last_idx == -1)
+                    # 🆕 YANGI USER
                     if last_idx == -1:
                         target_index = days_passed
-                        cursor.execute("SELECT secret_id FROM hikmatlar ORDER BY id ASC LIMIT 1 OFFSET ?", (target_index,))
+
+                        cursor.execute(
+                            "SELECT secret_id FROM hikmatlar ORDER BY id ASC LIMIT 1 OFFSET %s",
+                            (target_index,)
+                        )
                         hikmat = cursor.fetchone()
 
                         if hikmat:
                             bot.copy_message(u_id, SECRET_STORAGE_ID, hikmat[0])
-                            cursor.execute("UPDATE users SET last_sent_index = %s WHERE user_id = %s", (target_index, u_id))
+
+                            cursor.execute(
+                                "UPDATE users SET last_sent_index = %s WHERE user_id = %s",
+                                (target_index, u_id)
+                            )
                             conn.commit()
                             msg_counter += 1
 
-                    # 🔁 QARZ LOGIKA (Agar vaqti kelsa yoki qarzi juda ko'p bo'lsa)
+                    # 🔁 QARZ + NORMAL
                     elif last_idx < days_passed:
                         if current_time_str >= u_time or last_idx < days_passed - 1:
                             next_index = last_idx + 1
-                            cursor.execute("SELECT secret_id FROM hikmatlar ORDER BY id ASC LIMIT 1 OFFSET ?", (next_index,))
+
+                            cursor.execute(
+                                "SELECT secret_id FROM hikmatlar ORDER BY id ASC LIMIT 1 OFFSET %s",
+                                (next_index,)
+                            )
                             hikmat = cursor.fetchone()
 
                             if hikmat:
                                 bot.copy_message(u_id, SECRET_STORAGE_ID, hikmat[0])
-                                cursor.execute("UPDATE users SET last_sent_index = %s WHERE user_id = %s", (next_index, u_id))
+
+                                cursor.execute(
+                                    "UPDATE users SET last_sent_index = %s WHERE user_id = %s",
+                                    (next_index, u_id)
+                                )
                                 conn.commit()
                                 msg_counter += 1
 
-                    # 🔥 LIMITLARNI BOSHQARISH:
-                    # Har 20 ta xabardan keyin biroz to'xtaymiz (5000 ta odamda bot qotib qolmasligi uchun)
-                    if msg_counter >= 20:
-                        time.sleep(1) # Telegram Flood limitdan qochish
+                    # ⚡ FLOOD CONTROL (yumshoq)
+                    if msg_counter >= 15:
+                        time.sleep(1)
                         msg_counter = 0
                     else:
-                        time.sleep(0.04) # Kichik pauza (sekundiga ~25-30 xabar)
+                        time.sleep(0.05)
 
-                except Exception as e:
-                    # Bloklagan userlarni o'tkazib yuboramiz
+                except:
                     continue
 
-            # 🔵 2. ARXIV (07:00 dan keyin)
-            archive_index = days_passed - 1
-            if archive_index >= 0 and now.hour >= 7:
-                cursor.execute("""
-                    SELECT id, secret_id FROM hikmatlar
-                    WHERE is_posted_to_channel = 0 ORDER BY id ASC LIMIT 1
-                """)
-                hikmat = cursor.fetchone()
+            # 🔵 ARXIV (QARZ BILAN)
+            if now.hour >= 7:
+                while True:
+                    cursor.execute("""
+                        SELECT id, secret_id FROM hikmatlar
+                        WHERE is_posted_to_channel = 0
+                        ORDER BY id ASC
+                        LIMIT 1
+                    """)
+                    hikmat = cursor.fetchone()
 
-                if hikmat and hikmat[0] <= archive_index + 1:
+                    if not hikmat:
+                        break
+
+                    # faqat kerakli indeksgacha yuboradi
+                    if hikmat[0] > days_passed:
+                        break
+
                     try:
-                        sent_msg = bot.copy_message(ARCHIVE_CHANNEL_ID, SECRET_STORAGE_ID, hikmat[1], disable_notification=True)
-                        cursor.execute("UPDATE hikmatlar SET is_posted_to_channel = 1, public_id = ? WHERE id = %s", (sent_msg.message_id, hikmat[0]))
+                        sent_msg = bot.copy_message(
+                            ARCHIVE_CHANNEL_ID,
+                            SECRET_STORAGE_ID,
+                            hikmat[1],
+                            disable_notification=True
+                        )
+
+                        cursor.execute(
+                            "UPDATE hikmatlar SET is_posted_to_channel = 1, public_id = %s WHERE id = %s",
+                            (sent_msg.message_id, hikmat[0])
+                        )
                         conn.commit()
-                    except: pass
+
+                        time.sleep(0.5)  # kanal flooddan qochish
+
+                    except:
+                        break
 
             conn.close()
+
         except Exception as e:
             print(f"🔥 Timer xato: {e}")
-            if 'conn' in locals(): conn.close()
+            if 'conn' in locals():
+                conn.close()
 
-        time.sleep(60)
+        # 🧠 SMART SLEEP
+        if now.hour in [6,7,8]:  
+            time.sleep(15)   # aktiv vaqt
+        else:
+            time.sleep(60)   # oddiy vaqt
 
-
-# --- BOTNI ISHGA TUSHIRISH QISMI ---
+                                
 if __name__ == "__main__":
     # 1. Flask serverni (UptimeRobot uchun) ishga tushirish
     keep_alive()
