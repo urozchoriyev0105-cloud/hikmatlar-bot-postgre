@@ -817,12 +817,7 @@ def show_archive(message):
         reply_markup=markup
     )
 
-    # ✅ ASOSIY MENYU QAYTARILDI
-    bot.send_message(
-        message.chat.id,
-        "Asosiy menyu",
-        reply_markup=main_keyboard(message.from_user.id)
-    )
+    
     
 
 @bot.message_handler(func=lambda message: message.text == "🆘 Yordam")
