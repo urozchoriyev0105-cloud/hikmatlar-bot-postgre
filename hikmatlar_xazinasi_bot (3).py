@@ -61,9 +61,14 @@ cursor.execute('''CREATE TABLE IF NOT EXISTS users (
     username TEXT,
     phone TEXT,
     time1 TEXT DEFAULT '07:00',
-    last_sent_index INTEGER DEFAULT -1
-)''')
+    last_sent_index INTEGER DEFAULT -1,
+    daily_count INTEGER DEFAULT 0,
+    random_count INTEGER DEFAULT 0
+)''') 
 
+cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_count INTEGER DEFAULT 0")
+cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS random_count INTEGER DEFAULT 0")
+     
 cursor.execute('''CREATE TABLE IF NOT EXISTS hikmatlar (
     id SERIAL PRIMARY KEY,
     secret_id INTEGER,
@@ -1032,6 +1037,11 @@ def handle_random_hikmat_callback(call):
             ON CONFLICT DO NOTHING
             """,
             (user_id, hikmat_id)
+        ) 
+        # ✅ RANDOM STATISTIKA
+        cursor.execute(
+            "UPDATE users SET random_count = random_count + 1 WHERE user_id = %s",
+            (user_id,)
         )
 
         conn.commit()
