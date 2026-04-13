@@ -298,11 +298,11 @@ def start(message):
         bot.send_message(
             message.chat.id,
             get_welcome_text(user_id),
-            reply_markup=main_keyboard(user_id),
+            reply_markup=main_keyboard(user_id), 
             parse_mode="HTML"
         )
     else:
-        ask_for_contact(message.chat.id)
+        ask_for_contact(message.chat.id). 
 
 
 @bot.callback_query_handler(func=lambda call: call.data == "check")
@@ -345,6 +345,14 @@ def restricted_access(message):
         message.chat.id,
         "Kechirasiz, davom etish uchun kanalga a'zo bo'lishingiz kerak:",
         reply_markup=markup
+    ) 
+
+@bot.message_handler(func=lambda m: m.text == "⬅️ Orqaga")
+def back_to_main(message):
+    bot.send_message(
+        message.chat.id,
+        "Asosiy menyu",
+        reply_markup=main_keyboard(message.from_user.id)
     )
 
            
@@ -386,6 +394,18 @@ def manage_queue(message):
     except Exception as e:
         bot.send_message(message.chat.id, f"❌ Xatolik: {e}")
 
+def make_user_link(name, uname, user_id):
+    name = name if name else "Ismsiz"
+
+    # Username bo‘lsa
+    if uname:
+        uname_clean = uname.replace("@", "")
+        return f'<a href="https://t.me/{uname_clean}">@{uname_clean}</a>'
+    
+    # Username yo‘q bo‘lsa → ID orqali
+    return f'<a href="tg://user?id={user_id}">{name}</a>'
+
+
 @bot.message_handler(func=lambda m: m.text == "📊 Statistika")
 def show_stats(message):
     if message.from_user.id != ADMIN_ID:
@@ -413,7 +433,7 @@ def show_stats(message):
 
         # 🏆 TOP 10 (daily)
         cursor.execute("""
-            SELECT first_name, username, daily_count 
+            SELECT user_id, first_name, username, daily_count 
             FROM users 
             ORDER BY daily_count DESC 
             LIMIT 10
@@ -422,16 +442,25 @@ def show_stats(message):
 
         # 🎯 TOP 10 (random)
         cursor.execute("""
-            SELECT first_name, username, random_count 
+            SELECT user_id, first_name, username, random_count 
             FROM users 
             ORDER BY random_count DESC 
             LIMIT 10
         """)
         top_random = cursor.fetchall()
 
+        # 🆕 Oxirgi 15 ta user
+        cursor.execute("""
+            SELECT user_id, first_name, username 
+            FROM users 
+            ORDER BY user_id DESC 
+            LIMIT 15
+        """)
+        last_users = cursor.fetchall()
+
         conn.close()
 
-        # 🔥 CHIROYLI TEXT
+        # 🔥 TEXT
         text = (
             "📊 <b>STATISTIKA</b>\n"
             "━━━━━━━━━━━━━━━\n\n"
@@ -447,10 +476,9 @@ def show_stats(message):
 
         # 🏆 Daily TOP
         if top_daily:
-            for i, (name, uname, count) in enumerate(top_daily, 1):
-                username = f"@{uname}" if uname else ""
-                name = name if name else "Ismsiz"
-                text += f"{i}. {name} {username} — <b>{count}</b>\n"
+            for i, (u_id, name, uname, count) in enumerate(top_daily, 1):
+                user_link = make_user_link(name, uname, u_id)
+                text += f"{i}. {user_link} — <b>{count}</b>\n"
         else:
             text += "❌ Ma'lumot yo‘q\n"
 
@@ -459,10 +487,20 @@ def show_stats(message):
 
         # 🎯 Random TOP
         if top_random:
-            for i, (name, uname, count) in enumerate(top_random, 1):
-                username = f"@{uname}" if uname else ""
-                name = name if name else "Ismsiz"
-                text += f"{i}. {name} {username} — <b>{count}</b>\n"
+            for i, (u_id, name, uname, count) in enumerate(top_random, 1):
+                user_link = make_user_link(name, uname, u_id)
+                text += f"{i}. {user_link} — <b>{count}</b>\n"
+        else:
+            text += "❌ Ma'lumot yo‘q\n"
+
+        # 🆕 Oxirgi userlar
+        text += "\n━━━━━━━━━━━━━━━\n"
+        text += "🕒 <b>Oxirgi 15 ta foydalanuvchi</b>\n\n"
+
+        if last_users:
+            for i, (u_id, name, uname) in enumerate(last_users, 1):
+                user_link = make_user_link(name, uname, u_id)
+                text += f"{i}. {user_link}\n"
         else:
             text += "❌ Ma'lumot yo‘q\n"
 
@@ -470,6 +508,7 @@ def show_stats(message):
 
     except Exception as e:
         bot.send_message(message.chat.id, f"❌ Xato: {e}")
+
 # --- O‘CHIRISH ---
 @bot.callback_query_handler(func=lambda call: call.data.startswith("sql_del_"))
 def delete_sql_hikmat(call):
