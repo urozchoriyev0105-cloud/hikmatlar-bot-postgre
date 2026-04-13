@@ -1126,11 +1126,11 @@ def smart_timer():
                             disable_notification=True
                         )
 
-                        cursor.execute(
-                            "UPDATE hikmatlar 
-                             SET is_posted_to_channel = 1, public_id = %s 
-                             WHERE id = %s",
-                            (sent_msg.message_id, hikmat[0])
+                        cursor.execute("""
+                        UPDATE hikmatlar 
+                        SET is_posted_to_channel = 1, public_id = %s 
+                        WHERE id = %s",
+                        """,(sent_msg.message_id, hikmat[0])
                         )
                         conn.commit()
 
