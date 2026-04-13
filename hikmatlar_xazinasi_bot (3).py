@@ -356,26 +356,34 @@ def show_stats(message):
     cursor = conn.cursor()
     try:
         cursor.execute("SELECT COUNT(*) FROM users")
-        total_users = cursor.fetchone()[0]
+total_users = cursor.fetchone()[0]
 
-        # ❗ status TEXT bo‘lgani uchun
-        cursor.execute("SELECT COUNT(*) FROM hikmatlar WHERE status = 'queue'")
-        navbat = cursor.fetchone()[0]
+cursor.execute("SELECT COUNT(*) FROM hikmatlar")
+total_h = cursor.fetchone()[0]
 
-        # ❗ users jadvalda id yo‘q
-        cursor.execute("SELECT user_id, first_name, username FROM users ORDER BY user_id DESC LIMIT 15")
-        last_users = cursor.fetchall()
+cursor.execute("SELECT COUNT(*) FROM hikmatlar WHERE is_posted_to_channel = 0")
+navbat = cursor.fetchone()[0]
+
+cursor.execute("SELECT COUNT(*) FROM hikmatlar WHERE is_posted_to_channel = 1")
+arxiv = cursor.fetchone()[0]
 
         stats_text = (
-            f"📊 <b>Statistika:</b>\n\n"
-            f"👥 <b>Azolar:</b> {total_users}\n"
-            f"⌛ <b>Navbatda:</b> {navbat} ta\n\n"
-            f"👤 <b>Oxirgi 15 foydalanuvchi:</b>\n"
+    f"📊 <b>Statistika:</b>\n\n"
+    f"👥 <b>Azolar:</b> {total_users}\n"
+    f"📚 <b>Jami hikmat:</b> {total_h} ta\n"
+    f"⌛ <b>Navbatda:</b> {navbat} ta\n"
+    f"📦 <b>Arxivda:</b> {arxiv} ta\n\n"
+    f"👤 <b>Oxirgi 15 foydalanuvchi:</b>\n"
         )
 
         for u_id, name, uname in last_users:
-            display_name = name if name else "Ismsiz"
-            stats_text += f"🔹 <code>{u_id}</code> | {display_name}\n"
+    display_name = name if name else "Ismsiz"
+    username = uname if uname and uname != "Usernamesiz" else ""
+
+    if username:
+        stats_text += f"🔹 <code>{u_id}</code> | {display_name} ({username})\n"
+    else:
+        stats_text += f"🔹 <code>{u_id}</code> | {display_name}\n"
 
         bot.send_message(message.chat.id, stats_text, parse_mode="HTML")
 
@@ -487,13 +495,9 @@ def save_h(message):
     except Exception as e:
         bot.send_message(message.chat.id, "❌ Xato")
 
-
-
 @bot.message_handler(func=lambda m: m.text == "📂 Bazani yuklab olish")
 def send_db_file_button(message):
-    user_id = message.from_user.id
-
-    if user_id != ADMIN_ID:
+    if message.from_user.id != ADMIN_ID:
         return
 
     try:
@@ -502,32 +506,44 @@ def send_db_file_button(message):
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        file_name = f"backup_{datetime.now().strftime('%Y%m%d')}.csv"
+        file_name = f"full_backup_{datetime.now().strftime('%Y%m%d')}.csv"
 
         with open(file_name, "w", newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
 
             # USERS
-            writer.writerow(['TABLE', 'user_id', 'time1', 'last_sent_index'])
-            cursor.execute("SELECT user_id, time1, last_sent_index FROM users")
+            writer.writerow(['users','user_id','first_name','username','phone','time1','last_sent_index'])
+            cursor.execute("SELECT user_id, first_name, username, phone, time1, last_sent_index FROM users")
             for row in cursor.fetchall():
                 writer.writerow(['users', *row])
 
             # HIKMATLAR
-            writer.writerow(['TABLE', 'id', 'secret_id', 'is_posted_to_channel', 'public_id'])
-            cursor.execute("SELECT id, secret_id, is_posted_to_channel, public_id FROM hikmatlar")
+            writer.writerow(['hikmatlar','id','secret_id','status','is_posted_to_channel','public_id'])
+            cursor.execute("SELECT id, secret_id, status, is_posted_to_channel, public_id FROM hikmatlar")
             for row in cursor.fetchall():
                 writer.writerow(['hikmatlar', *row])
 
+            # RANDOM LIMITS
+            writer.writerow(['random_limits','user_id','last_key'])
+            cursor.execute("SELECT user_id, last_key FROM random_limits")
+            for row in cursor.fetchall():
+                writer.writerow(['random_limits', *row])
+
+            # SEEN HIKMATLAR
+            writer.writerow(['seen_hikmatlar','user_id','hikmat_id'])
+            cursor.execute("SELECT user_id, hikmat_id FROM seen_hikmatlar")
+            for row in cursor.fetchall():
+                writer.writerow(['seen_hikmatlar', *row])
+
         with open(file_name, "rb") as doc:
-            bot.send_document(message.chat.id, doc, caption="🚀 TO‘LIQ BACKUP")
+            bot.send_document(message.chat.id, doc, caption="🔥 FULL BACKUP")
 
         cursor.close()
         conn.close()
         os.remove(file_name)
 
     except Exception as e:
-        bot.send_message(message.chat.id, f"❌ Xato: {e}")
+        bot.send_message(message.chat.id, f"❌ Xato: {e}") 
 
 
 @bot.message_handler(content_types=['document'])
@@ -536,60 +552,86 @@ def handle_restore(message):
         return
 
     if not message.document.file_name.endswith('.csv'):
+        bot.reply_to(message, "❌ Faqat .csv fayl yuboring")
         return
 
     try:
         file_info = bot.get_file(message.document.file_id)
         downloaded_file = bot.download_file(file_info.file_path)
 
-        with open("temp_restore.csv", 'wb') as f:
+        with open("restore.csv", 'wb') as f:
             f.write(downloaded_file)
 
         import csv
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        with open("temp_restore.csv", 'r', encoding='utf-8') as f:
+        with open("restore.csv", 'r', encoding='utf-8') as f:
             reader = csv.reader(f)
-            next(reader)
 
             for row in reader:
+                if not row:
+                    continue
+
                 if row[0] == 'users':
                     cursor.execute("""
-                        INSERT INTO users (user_id, time1, last_sent_index)
-                        VALUES (%s, %s, %s)
-                        ON CONFLICT (user_id) DO UPDATE
-                        SET time1 = EXCLUDED.time1,
-                            last_sent_index = EXCLUDED.last_sent_index
+                        INSERT INTO users (user_id, first_name, username, phone, time1, last_sent_index)
+                        VALUES (%s,%s,%s,%s,%s,%s)
+                        ON CONFLICT (user_id) DO UPDATE SET
+                        first_name=EXCLUDED.first_name,
+                        username=EXCLUDED.username,
+                        phone=EXCLUDED.phone,
+                        time1=EXCLUDED.time1,
+                        last_sent_index=EXCLUDED.last_sent_index
                     """, (
                         int(row[1]),
                         row[2],
-                        int(row[3])
+                        row[3],
+                        row[4],
+                        row[5],
+                        int(row[6])
                     ))
 
                 elif row[0] == 'hikmatlar':
                     cursor.execute("""
-                        INSERT INTO hikmatlar (id, secret_id, is_posted_to_channel, public_id)
-                        VALUES (%s, %s, %s, %s)
-                        ON CONFLICT (id) DO UPDATE
-                        SET is_posted_to_channel = EXCLUDED.is_posted_to_channel,
-                            public_id = EXCLUDED.public_id
+                        INSERT INTO hikmatlar (id, secret_id, status, is_posted_to_channel, public_id)
+                        VALUES (%s,%s,%s,%s,%s)
+                        ON CONFLICT (id) DO UPDATE SET
+                        status=EXCLUDED.status,
+                        is_posted_to_channel=EXCLUDED.is_posted_to_channel,
+                        public_id=EXCLUDED.public_id
                     """, (
                         int(row[1]),
                         int(row[2]),
-                        int(row[3]),
-                        int(row[4]) if row[4] else None
+                        row[3],
+                        int(row[4]),
+                        int(row[5]) if row[5] else None
                     ))
+
+                elif row[0] == 'random_limits':
+                    cursor.execute("""
+                        INSERT INTO random_limits (user_id, last_key)
+                        VALUES (%s,%s)
+                        ON CONFLICT DO NOTHING
+                    """, (int(row[1]), row[2]))
+
+                elif row[0] == 'seen_hikmatlar':
+                    cursor.execute("""
+                        INSERT INTO seen_hikmatlar (user_id, hikmat_id)
+                        VALUES (%s,%s)
+                        ON CONFLICT DO NOTHING
+                    """, (int(row[1]), int(row[2])))
 
         conn.commit()
         cursor.close()
         conn.close()
-        os.remove("temp_restore.csv")
+        os.remove("restore.csv")
 
-        bot.reply_to(message, "✅ Tiklandi")
+        bot.reply_to(message, "✅ FULL tiklandi!")
 
     except Exception as e:
-        bot.reply_to(message, "❌ Xato")  
+        bot.reply_to(message, f"❌ Xato: {e}")
+
 
 @bot.message_handler(func=lambda m: m.text == "📢 Xabar yuborish")
 def start_broadcast(message):
