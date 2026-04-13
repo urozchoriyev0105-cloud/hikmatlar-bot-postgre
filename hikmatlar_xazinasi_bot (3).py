@@ -248,6 +248,16 @@ def share_bot(message):
         reply_markup=markup
     )
 
+@bot.message_handler(func=lambda m: m.text == "⚙️ Admin Panel")
+def admin_panel(message):
+    if message.from_user.id != ADMIN_ID:
+        return
+
+    bot.send_message(
+        message.chat.id,
+        "⚙️ Admin panelga xush kelibsiz",
+        reply_markup=admin_keyboard()
+    )
 
 
 
