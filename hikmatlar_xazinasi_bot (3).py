@@ -314,6 +314,22 @@ def start(message):
         )
     else:
         ask_for_contact(message.chat.id)
+# --- OBUNA BO'LMAGANLAR UCHUN CHEKLOV ---
+@bot.message_handler(func=lambda message: not is_subscribed(message.from_user.id))
+def restricted_access(message):
+    if message.from_user.id == ADMIN_ID:
+        return
+
+    markup = types.InlineKeyboardMarkup()
+    for ch in CHECK_CHANNELS:
+        markup.add(types.InlineKeyboardButton("Kanalga a'zo bo'lish", url=ch['link']))
+    markup.add(types.InlineKeyboardButton("✅ Tekshirish", callback_data="check"))
+
+    bot.send_message(
+        message.chat.id,
+        "Kechirasiz, davom etish uchun kanalga a'zo bo'lishingiz kerak:",
+        reply_markup=markup
+    ) 
 
 
 @bot.callback_query_handler(func=lambda call: call.data == "check")
@@ -1080,25 +1096,6 @@ def handle_random_hikmat_callback(call):
     finally:
         conn.close()
 
-
-
-
-# --- OBUNA BO'LMAGANLAR UCHUN CHEKLOV ---
-@bot.message_handler(func=lambda message: not is_subscribed(message.from_user.id))
-def restricted_access(message):
-    if message.from_user.id == ADMIN_ID:
-        return
-
-    markup = types.InlineKeyboardMarkup()
-    for ch in CHECK_CHANNELS:
-        markup.add(types.InlineKeyboardButton("Kanalga a'zo bo'lish", url=ch['link']))
-    markup.add(types.InlineKeyboardButton("✅ Tekshirish", callback_data="check"))
-
-    bot.send_message(
-        message.chat.id,
-        "Kechirasiz, davom etish uchun kanalga a'zo bo'lishingiz kerak:",
-        reply_markup=markup
-    ) 
 
 
 def auto_backup():
