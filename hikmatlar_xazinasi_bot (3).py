@@ -958,7 +958,29 @@ def cancel_time(call):
         call.message.chat.id,
         "Bekor qilindi",
         reply_markup=main_keyboard(call.from_user.id)
-)
+) 
+
+
+
+@bot.message_handler(func=lambda m: m.text == "🎲 Tasodifiy hikmat")
+def ask_for_random_hikmat(message):
+    # Bu yerda foydalanuvchiga tushuntirish xati va Inline tugma yuboramiz
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("✨ Hikmatni ko'rish", callback_data="get_random_hikmat")
+    markup.add(btn)
+
+    text = (
+        "📝 **Eslatma:** Ushbu hikmatlar shu vaqtgacha bot tomonidan taqdim etilgan (arxivdagi) xabarlar ichidan tasodifiy olinadi.\n\n"
+        "🎯 **Eng muhimi:** Bot har bir foydalanuvchiga turlicha hikmatlar beradi va bir marta taqdim etilgan hikmatni sizga qayta yubormaydi.\n\n"
+        "💡 *Ushbu tasodifiy hikmat balki siz uchun muhim eslatma bo‘lishi mumkin!!!*"
+         )
+
+    bot.send_message(message.chat.id, text, parse_mode="Markdown", reply_markup=markup)
+
+@bot.message_handler(func=lambda m: m.text == "⬅️ Orqaga")
+def back(message):
+    bot.send_message(message.chat.id, "Asosiy menyu", reply_markup=main_keyboard(message.from_user.id))
+
 
 @bot.callback_query_handler(func=lambda call: call.data == "get_random_hikmat")
 def handle_random_hikmat_callback(call):
@@ -1299,31 +1321,35 @@ def smart_timer():
 
                                 
 if __name__ == "__main__":
-    # 1. Flask serverni (UptimeRobot uchun) ishga tushirish
-    keep_alive() 
+    # 1. Flask (UptimeRobot)
+    keep_alive()
 
     update_db()
 
-    # 2. Smart timerni alohida oqimda ishga tushirish
-    # threading.Thread emas, shunchaki Thread deb yozamiz
+    # 2. Threadlar
     timer_thread = Thread(target=smart_timer, daemon=True)
-    timer_thread.start()   
+    timer_thread.start()
 
     backup_thread = Thread(target=auto_backup, daemon=True)
     backup_thread.start()
 
-    # 3. Admin xabarnomasi
+    # ❗ ENG MUHIM QATOR
+    bot.remove_webhook()
+
+    time.sleep(1)
+
+    # 3. Admin xabar
     try:
         if ADMIN_ID:
             bot.send_message(ADMIN_ID, "🟢 Bot serverda muvaffaqiyatli ishga tushdi!")
     except Exception as e:
-        print(f"Xabarnoma yuborishda xato: {e}")
+        print(f"Xabarnoma xato: {e}")
 
-    print("Bot muvaffaqiyatli ishga tushdi...")
+    print("Bot ishga tushdi...")
 
-    # 4. Botni tinimsiz ishlatish (Polling)
+    # 4. Polling (faqat 1 marta)
     bot.infinity_polling(timeout=20, long_polling_timeout=10)
-
+    
 
 
 
