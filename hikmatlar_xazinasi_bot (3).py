@@ -387,6 +387,7 @@ def manage_queue(message):
 
     except Exception as e:
         bot.send_message(message.chat.id, f"❌ Xatolik: {e}")
+
 @bot.message_handler(func=lambda m: m.text == "📊 Statistika")
 def show_stats(message):
     if message.from_user.id != ADMIN_ID:
@@ -432,34 +433,45 @@ def show_stats(message):
 
         conn.close()
 
-        text = f"""
-📊 <b>Statistika</b>
+        # 🔥 CHIROYLI TEXT
+        text = (
+            "📊 <b>STATISTIKA</b>\n"
+            "━━━━━━━━━━━━━━━\n\n"
 
-👥 Azolar: <b>{total_users}</b>
-📚 Hikmatlar: <b>{total_h}</b>
-⌛ Navbat: <b>{navbat}</b>
-📦 Arxiv: <b>{arxiv}</b>
+            f"👥 <b>Foydalanuvchilar:</b> {total_users}\n"
+            f"📚 <b>Hikmatlar:</b> {total_h}\n"
+            f"⌛ <b>Navbatda:</b> {navbat}\n"
+            f"📦 <b>Arxivda:</b> {arxiv}\n\n"
 
-🏆 <b>TOP 10 (kunlik hikmat):</b>
-"""
+            "━━━━━━━━━━━━━━━\n"
+            "🏆 <b>TOP 10 (Kunlik hikmat)</b>\n\n"
+        )
 
-        # TOP daily
-        for i, (name, uname, count) in enumerate(top_daily, 1):
-            username = f"@{uname}" if uname else ""
-            text += f"\n{i}. {name} {username} — {count}"
+        # 🏆 Daily TOP
+        if top_daily:
+            for i, (name, uname, count) in enumerate(top_daily, 1):
+                username = f"@{uname}" if uname else ""
+                name = name if name else "Ismsiz"
+                text += f"{i}. {name} {username} — <b>{count}</b>\n"
+        else:
+            text += "❌ Ma'lumot yo‘q\n"
 
-        text += "\n\n🎯 <b>TOP 10 (tasodifiy hikmat):</b>\n"
+        text += "\n━━━━━━━━━━━━━━━\n"
+        text += "🎯 <b>TOP 10 (Tasodifiy hikmat)</b>\n\n"
 
-        # TOP random
-        for i, (name, uname, count) in enumerate(top_random, 1):
-            username = f"@{uname}" if uname else ""
-            text += f"\n{i}. {name} {username} — {count}"
+        # 🎯 Random TOP
+        if top_random:
+            for i, (name, uname, count) in enumerate(top_random, 1):
+                username = f"@{uname}" if uname else ""
+                name = name if name else "Ismsiz"
+                text += f"{i}. {name} {username} — <b>{count}</b>\n"
+        else:
+            text += "❌ Ma'lumot yo‘q\n"
 
         bot.send_message(message.chat.id, text, parse_mode="HTML")
 
     except Exception as e:
         bot.send_message(message.chat.id, f"❌ Xato: {e}")
-
 # --- O‘CHIRISH ---
 @bot.callback_query_handler(func=lambda call: call.data.startswith("sql_del_"))
 def delete_sql_hikmat(call):
@@ -1001,7 +1013,6 @@ def handle_random_hikmat_callback(call):
 
 
 
-
 def smart_timer():
     print("🚀 Smart timer ishga tushdi...")
     tashkent_tz = pytz.timezone('Asia/Tashkent')
@@ -1037,10 +1048,18 @@ def smart_timer():
                         if hikmat:
                             bot.copy_message(u_id, SECRET_STORAGE_ID, hikmat[0])
 
+                            # ✅ STATISTIKA
+                            cursor.execute(
+                                "UPDATE users SET daily_count = daily_count + 1 WHERE user_id = %s",
+                                (u_id,)
+                            )
+
+                            # ✅ INDEX
                             cursor.execute(
                                 "UPDATE users SET last_sent_index = %s WHERE user_id = %s",
                                 (target_index, u_id)
                             )
+
                             conn.commit()
                             msg_counter += 1
 
@@ -1058,24 +1077,33 @@ def smart_timer():
                             if hikmat:
                                 bot.copy_message(u_id, SECRET_STORAGE_ID, hikmat[0])
 
+                                # ✅ STATISTIKA
+                                cursor.execute(
+                                    "UPDATE users SET daily_count = daily_count + 1 WHERE user_id = %s",
+                                    (u_id,)
+                                )
+
+                                # ✅ INDEX
                                 cursor.execute(
                                     "UPDATE users SET last_sent_index = %s WHERE user_id = %s",
                                     (next_index, u_id)
                                 )
+
                                 conn.commit()
                                 msg_counter += 1
 
-                    # ⚡ FLOOD CONTROL (yumshoq)
+                    # ⚡ FLOOD CONTROL
                     if msg_counter >= 15:
                         time.sleep(1)
                         msg_counter = 0
                     else:
                         time.sleep(0.05)
 
-                except:
+                except Exception as e:
+                    print(f"User error: {e}")
                     continue
 
-            # 🔵 ARXIV (QARZ BILAN)
+            # 🔵 ARXIV
             if now.hour >= 7:
                 while True:
                     cursor.execute("""
@@ -1089,7 +1117,6 @@ def smart_timer():
                     if not hikmat:
                         break
 
-                    # faqat kerakli indeksgacha yuboradi
                     if hikmat[0] > days_passed:
                         break
 
@@ -1102,12 +1129,14 @@ def smart_timer():
                         )
 
                         cursor.execute(
-                            "UPDATE hikmatlar SET is_posted_to_channel = 1, public_id = %s WHERE id = %s",
+                            "UPDATE hikmatlar 
+                             SET is_posted_to_channel = 1, public_id = %s 
+                             WHERE id = %s",
                             (sent_msg.message_id, hikmat[0])
                         )
                         conn.commit()
 
-                        time.sleep(0.5)  # kanal flooddan qochish
+                        time.sleep(0.5)
 
                     except:
                         break
@@ -1120,10 +1149,10 @@ def smart_timer():
                 conn.close()
 
         # 🧠 SMART SLEEP
-        if now.hour in [6,7,8]:  
-            time.sleep(15)   # aktiv vaqt
+        if now.hour in [6, 7, 8]:
+            time.sleep(15)
         else:
-            time.sleep(60)   # oddiy vaqt
+            time.sleep(60)
 
                                 
 if __name__ == "__main__":
