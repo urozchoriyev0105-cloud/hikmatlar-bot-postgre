@@ -557,7 +557,7 @@ def save_h(message):
     except Exception as e:
         bot.send_message(message.chat.id, "❌ Xato")
 
-@bot.message_handler(func=lambda m: m.text == "📂 Bazani yuklab olish")
+@bot.message_handler(func=lambda m: m.text == "📂 Bazani yuklab olish") 
 def send_db_file_button(message):
     if message.from_user.id != ADMIN_ID:
         return
@@ -574,8 +574,16 @@ def send_db_file_button(message):
             writer = csv.writer(f)
 
             # USERS
-            writer.writerow(['users','user_id','first_name','username','phone','time1','last_sent_index'])
-            cursor.execute("SELECT user_id, first_name, username, phone, time1, last_sent_index FROM users")
+            writer.writerow([
+                'users','user_id','first_name','username','phone',
+                'time1','last_sent_index','daily_count','random_count'
+            ])
+
+            cursor.execute("""
+                SELECT user_id, first_name, username, phone, time1, last_sent_index, daily_count, random_count 
+                FROM users
+            """)
+
             for row in cursor.fetchall():
                 writer.writerow(['users', *row])
 
@@ -605,7 +613,7 @@ def send_db_file_button(message):
         os.remove(file_name)
 
     except Exception as e:
-        bot.send_message(message.chat.id, f"❌ Xato: {e}") 
+        bot.send_message(message.chat.id, f"❌ Xato: {e}")  
 
 
 @bot.message_handler(content_types=['document'])
@@ -637,21 +645,28 @@ def handle_restore(message):
 
                 if row[0] == 'users':
                     cursor.execute("""
-                        INSERT INTO users (user_id, first_name, username, phone, time1, last_sent_index)
-                        VALUES (%s,%s,%s,%s,%s,%s)
+                        INSERT INTO users (
+                            user_id, first_name, username, phone,
+                            time1, last_sent_index, daily_count, random_count
+                        )
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
                         ON CONFLICT (user_id) DO UPDATE SET
-                        first_name=EXCLUDED.first_name,
-                        username=EXCLUDED.username,
-                        phone=EXCLUDED.phone,
-                        time1=EXCLUDED.time1,
-                        last_sent_index=EXCLUDED.last_sent_index
+                            first_name=EXCLUDED.first_name,
+                            username=EXCLUDED.username,
+                            phone=EXCLUDED.phone,
+                            time1=EXCLUDED.time1,
+                            last_sent_index=EXCLUDED.last_sent_index,
+                            daily_count=EXCLUDED.daily_count,
+                            random_count=EXCLUDED.random_count
                     """, (
                         int(row[1]),
                         row[2],
                         row[3],
                         row[4],
                         row[5],
-                        int(row[6])
+                        int(row[6]),
+                        int(row[7]),
+                        int(row[8])
                     ))
 
                 elif row[0] == 'hikmatlar':
@@ -682,7 +697,7 @@ def handle_restore(message):
                         INSERT INTO seen_hikmatlar (user_id, hikmat_id)
                         VALUES (%s,%s)
                         ON CONFLICT DO NOTHING
-                    """, (int(row[1]), int(row[2])))
+                    """, (int(row[1]), int(row[2]))
 
         conn.commit()
         cursor.close()
@@ -693,7 +708,6 @@ def handle_restore(message):
 
     except Exception as e:
         bot.reply_to(message, f"❌ Xato: {e}")
-
 
 @bot.message_handler(func=lambda m: m.text == "📢 Xabar yuborish")
 def start_broadcast(message):
@@ -1087,7 +1101,75 @@ def restricted_access(message):
     ) 
 
 
+def auto_backup():
+    print("📦 Auto backup ishga tushdi...")
 
+    tashkent_tz = pytz.timezone('Asia/Tashkent')
+    last_backup_date = None
+
+    while True:
+        try:
+            now = datetime.now(tashkent_tz)
+
+            if now.strftime("%H:%M") == "00:00":
+                today_str = now.strftime("%Y-%m-%d")
+
+                if last_backup_date != today_str:
+                    last_backup_date = today_str
+
+                    import csv
+                    conn = get_db_connection()
+                    cursor = conn.cursor()
+
+                    file_name = f"auto_backup_{now.strftime('%Y%m%d')}.csv"
+
+                    with open(file_name, "w", newline='', encoding='utf-8') as f:
+                        writer = csv.writer(f)
+
+                        # USERS
+                        writer.writerow([
+                            'users','user_id','first_name','username','phone',
+                            'time1','last_sent_index','daily_count','random_count'
+                        ])
+
+                        cursor.execute("""
+                        SELECT user_id, first_name, username, phone, time1, last_sent_index, daily_count, random_count 
+                        FROM users
+                        """)
+                        for row in cursor.fetchall():
+                            writer.writerow(['users', *row])
+
+                        # HIKMATLAR
+                        writer.writerow(['hikmatlar','id','secret_id','status','is_posted_to_channel','public_id'])
+                        cursor.execute("SELECT id, secret_id, status, is_posted_to_channel, public_id FROM hikmatlar")
+                        for row in cursor.fetchall():
+                            writer.writerow(['hikmatlar', *row])
+
+                        # RANDOM LIMITS
+                        writer.writerow(['random_limits','user_id','last_key'])
+                        cursor.execute("SELECT user_id, last_key FROM random_limits")
+                        for row in cursor.fetchall():
+                            writer.writerow(['random_limits', *row])
+
+                        # SEEN
+                        writer.writerow(['seen_hikmatlar','user_id','hikmat_id'])
+                        cursor.execute("SELECT user_id, hikmat_id FROM seen_hikmatlar")
+                        for row in cursor.fetchall():
+                            writer.writerow(['seen_hikmatlar', *row])
+
+                    with open(file_name, "rb") as doc:
+                        bot.send_document(ADMIN_ID, doc, caption="📦 Auto backup")
+
+                    cursor.close()
+                    conn.close()
+                    os.remove(file_name)
+
+                    print("✅ Backup yuborildi")
+
+        except Exception as e:
+            print(f"❌ Backup xato: {e}")
+
+        time.sleep(60)
 
 
 
@@ -1242,7 +1324,10 @@ if __name__ == "__main__":
     # 2. Smart timerni alohida oqimda ishga tushirish
     # threading.Thread emas, shunchaki Thread deb yozamiz
     timer_thread = Thread(target=smart_timer, daemon=True)
-    timer_thread.start()
+    timer_thread.start()   
+
+    backup_thread = Thread(target=auto_backup, daemon=True)
+    backup_thread.start()
 
     # 3. Admin xabarnomasi
     try:
