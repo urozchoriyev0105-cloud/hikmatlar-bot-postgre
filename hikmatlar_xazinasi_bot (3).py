@@ -7,7 +7,8 @@ import pytz
 from datetime import datetime
 from pathlib import Path
 from flask import Flask
-from threading import Thread
+from threading import Thread 
+from db_update import update_db
 
 app = Flask(__name__)
 
@@ -1154,7 +1155,9 @@ def smart_timer():
                                 
 if __name__ == "__main__":
     # 1. Flask serverni (UptimeRobot uchun) ishga tushirish
-    keep_alive()
+    keep_alive() 
+
+    update_db()
 
     # 2. Smart timerni alohida oqimda ishga tushirish
     # threading.Thread emas, shunchaki Thread deb yozamiz
