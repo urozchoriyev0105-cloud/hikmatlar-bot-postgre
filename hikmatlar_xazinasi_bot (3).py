@@ -382,14 +382,16 @@ def manage_queue(message):
         bot.send_message(message.chat.id, f"❌ Xatolik: {e}")
 
 def make_user_link(name, uname, user_id):
-    name = name if name else "Ismsiz"
+    # Ism bo‘lmasa
+    if not name:
+        name = "Ismsiz"
 
-    # Username bo‘lsa
-    if uname:
+    # Username bor bo‘lsa
+    if uname and uname != "Usernamesiz":
         uname_clean = uname.replace("@", "")
-        return f'<a href="https://t.me/{uname_clean}">@{uname_clean}</a>'
-    
-    # Username yo‘q bo‘lsa → ID orqali
+        return f'<a href="https://t.me/{uname_clean}">{name}</a> | @{uname_clean}'
+
+    # Username yo‘q bo‘lsa (faqat ism bosiladigan)
     return f'<a href="tg://user?id={user_id}">{name}</a>'
 
 
@@ -464,8 +466,7 @@ def show_stats(message):
         # 🏆 Daily TOP
         if top_daily:
             for i, (u_id, name, uname, count) in enumerate(top_daily, 1):
-                user_link = make_user_link(name, uname, u_id)
-                text += f"{i}. {user_link} — <b>{count}</b>\n"
+                text += f"{i}. {make_user_link(name, uname, u_id)} — <b>{count}</b>\n"
         else:
             text += "❌ Ma'lumot yo‘q\n"
 
@@ -475,8 +476,7 @@ def show_stats(message):
         # 🎯 Random TOP
         if top_random:
             for i, (u_id, name, uname, count) in enumerate(top_random, 1):
-                user_link = make_user_link(name, uname, u_id)
-                text += f"{i}. {user_link} — <b>{count}</b>\n"
+                text += f"{i}. {make_user_link(name, uname, u_id)} — <b>{count}</b>\n"
         else:
             text += "❌ Ma'lumot yo‘q\n"
 
@@ -486,8 +486,7 @@ def show_stats(message):
 
         if last_users:
             for i, (u_id, name, uname) in enumerate(last_users, 1):
-                user_link = make_user_link(name, uname, u_id)
-                text += f"{i}. {user_link}\n"
+                text += f"{i}. {make_user_link(name, uname, u_id)}\n"
         else:
             text += "❌ Ma'lumot yo‘q\n"
 
@@ -495,6 +494,7 @@ def show_stats(message):
 
     except Exception as e:
         bot.send_message(message.chat.id, f"❌ Xato: {e}")
+
 
 # --- O‘CHIRISH ---
 @bot.callback_query_handler(func=lambda call: call.data.startswith("sql_del_"))
@@ -760,7 +760,19 @@ def broad_send(message):
         reply_markup=admin_keyboard()
     )
 
+@bot.message_handler(func=lambda m: m.text == "🎲 Tasodifiy hikmat")
+def random_hikmat_button(message):
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton(
+        "🎲 Hikmatni olish",
+        callback_data="get_random_hikmat"
+    ))
 
+    bot.send_message(
+        message.chat.id,
+        "🎲 Tasodifiy hikmat olish uchun tugmani bosing:",
+        reply_markup=markup
+)
         
 
             
@@ -796,6 +808,25 @@ def show_archive(message):
         reply_markup=main_keyboard(message.from_user.id)
     )
     
+
+@bot.message_handler(func=lambda message: message.text == "🆘 Yordam")
+def help_handler(message):
+    # Siz bergan matn aynan o'zidek:
+    help_text = (
+        "⚠️ <b>Texnik ogohlantirish:</b>\n\n"
+        "Bot server orqali avtomatik rejimda ishlaydi. Ba'zida texnik sabablar yoki internet nosozliklari "
+        "tufayli xabarlar belgilangan vaqtdan biroz kechikishi mumkin. Bunday holatlarda to'g'ri "
+        "tushunasiz degan umiddaman.\n\n"
+        "📩 <b>Aloqa va murojaat:</b>\n\n"
+        "Agar bot ishlamay qolsa yoki fikr-mulohaza takliflaringiz bo'lsa, aloqa botimiz orqali murojaat qilishingiz mumkin."
+    )
+
+    # Matn tagidagi inline tugma
+    markup = types.InlineKeyboardMarkup()
+    btn_contact = types.InlineKeyboardButton(text="✍️ Aloqa botiga o'tish", url="https://t.me/my_botstg_aloqabot")
+    markup.add(btn_contact)
+
+    bot.send_message(message.chat.id, help_text, parse_mode='HTML', reply_markup=markup)
 
 
 @bot.message_handler(content_types=['contact'])
