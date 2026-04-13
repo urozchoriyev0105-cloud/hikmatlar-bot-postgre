@@ -354,13 +354,7 @@ def restricted_access(message):
         reply_markup=markup
     )
 
-
-# --- ADMIN PANEL ---
-@bot.message_handler(func=lambda m: m.text == "⚙️ Admin Panel" and m.from_user.id == ADMIN_ID)
-def admin_menu(message):
-    bot.send_message(message.chat.id, "🔧 Admin Panel:", reply_markup=admin_keyboard())
-
-@bot.message_handler(func=lambda m: m.text == "📊 Statistika" and m.from_user.id == ADMIN_ID)
+@bot.message_handler(func=lambda m: m.text == "📊 Statistika")
 def show_stats(message):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -369,39 +363,38 @@ def show_stats(message):
         cursor.execute("SELECT COUNT(*) FROM users")
         total_users = cursor.fetchone()[0]
 
-        # 2. Kanalga hali chiqmagan (navbatdagi) hikmatlar soni
-        cursor.execute("SELECT COUNT(*) FROM hikmatlar WHERE is_posted_to_channel = 0")
+        # 2. Kanalga hali chiqmagan (navbatdagi) hikmatlar
+        # ESLATMA: status ustuni nomini tekshiring (masalan, status = 0 yoki is_posted = False)
+        cursor.execute("SELECT COUNT(*) FROM hikmatlar WHERE status = 0")
         navbat = cursor.fetchone()[0]
 
         # 3. Oxirgi 15 ta ro'yxatdan o'tgan foydalanuvchi
-        cursor.execute("SELECT user_id, first_name, username FROM users ORDER BY ROWID DESC LIMIT 15")
+        cursor.execute("SELECT user_id, first_name, username FROM users ORDER BY id DESC LIMIT 15")
         last_users = cursor.fetchall()
 
         stats_text = (
             f"📊 <b>Statistika:</b>\n\n"
             f"👥 <b>Azolar:</b> {total_users}\n"
-            f"⏳ <b>Navbatda:</b> {navbat} ta \n\n"
+            f"⌛ <b>Navbatda:</b> {navbat} ta \n"
             f"👤 <b>Oxirgi 15 foydalanuvchi:</b>\n"
         )
 
         for u in last_users:
             u_id, name, uname = u
             display_name = name if name else "Ismsiz"
-            display_username = uname if uname else "Usernamesiz"
-            stats_text += f"🔹 <code>{u_id}</code> | {display_name} | {display_username}\n"
+            display_username = f"@{uname}" if uname else "Yashirin"
+            stats_text += f"🔹 <code>{u_id}</code> | {display_name}\n"
 
-        # MUHIM: Xabarni yuborish try blokining ichida bo'lishi kerak
         bot.send_message(message.chat.id, stats_text, parse_mode="HTML")
 
     except Exception as e:
-        print(f"Statistika xatosi: {e}")
-        bot.send_message(message.chat.id, "❌ Statistika yuklanishida xatolik yuz berdi.")
-
+        bot.send_message(message.chat.id, f"❌ Xato: {e}")
     finally:
-        # Baza ulanishini har doim yopish
+        cursor.close()
         conn.close()
 
 
+           
 @bot.message_handler(func=lambda m: m.text == "📝 Navbatni boshqarish" and m.from_user.id == ADMIN_ID)
 def manage_queue(message):
     try:
@@ -491,23 +484,42 @@ def save_h(message):
 
 
 
-@bot.message_handler(func=lambda m: m.text == "📂 Bazani yuklab olish")
+@bot.message_handler(func=lambda m: m.text == "📁 Bazani yuklab olish")
 def send_db_file_button(message):
-    # ADMIN_ID ni .env dan olingan qiymat bilan tekshirish
-    if ADMIN_ID and int(message.from_user.id) == ADMIN_ID:
+    # .env dan olingan ADMIN_ID bilan tekshirish
+    if str(message.from_user.id) == str(ADMIN_ID):
         try:
-            if backup_db():
-                with open('backup.db', 'rb') as f:
-                    bot.send_document(
-                        message.chat.id,
-                        f,
-                        caption=f"📂 Baza backup fayli\n⏰ Vaqt: {datetime.now().strftime('%H:%M:%S')}",
-                        visible_file_name="hikmat_base_backup.db"
-                    )
-            else:
-                bot.send_message(message.chat.id, "❌ Backup yaratishda xatolik yuz berdi.")
+            import csv
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            # 1. Foydalanuvchilar bazasini CSV ga yozish
+            cursor.execute("SELECT * FROM users")
+            rows = cursor.fetchall()
+            
+            file_name = "users_backup.csv"
+            with open(file_name, "w", newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow([i[0] for i in cursor.description]) # Ustun nomlari
+                writer.writerows(rows)
+            
+            # 2. Faylni yuborish
+            with open(file_name, "rb") as doc:
+                bot.send_document(
+                    message.chat.id, 
+                    doc, 
+                    caption=f"📁 Baza backup (CSV format)\n⏰ Vaqt: {datetime.now().strftime('%H:%M:%S')}"
+                )
+            
+            cursor.close()
+            conn.close()
+            os.remove(file_name) # Vaqtinchalik faylni o'chirish
+            
         except Exception as e:
             bot.send_message(message.chat.id, f"❌ Faylni yuborishda xato: {e}")
+    else:
+        bot.send_message(message.chat.id, "⛔️ Bu tugma faqat admin uchun!")
+
 
 
 
