@@ -307,7 +307,7 @@ def start(message):
             parse_mode="HTML"
         )
     else:
-        ask_for_contact(message.chat.id). 
+        ask_for_contact(message.chat.id)
 
 
 @bot.callback_query_handler(func=lambda call: call.data == "check")
