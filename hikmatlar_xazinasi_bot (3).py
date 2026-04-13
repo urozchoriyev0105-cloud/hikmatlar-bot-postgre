@@ -631,7 +631,6 @@ def send_db_file_button(message):
     except Exception as e:
         bot.send_message(message.chat.id, f"❌ Xato: {e}")  
 
-
 @bot.message_handler(content_types=['document'])
 def handle_restore(message):
     if message.from_user.id != ADMIN_ID:
@@ -699,7 +698,7 @@ def handle_restore(message):
                         row[3],
                         int(row[4]),
                         int(row[5]) if row[5] else None
-                    ))
+                    ))  # <-- SHU YERDA YOPISH YETISHMAYOTGAN EDI
 
                 elif row[0] == 'random_limits':
                     cursor.execute("""
@@ -713,7 +712,7 @@ def handle_restore(message):
                         INSERT INTO seen_hikmatlar (user_id, hikmat_id)
                         VALUES (%s,%s)
                         ON CONFLICT DO NOTHING
-                    """, (int(row[1]), int(row[2]))
+                    """, (int(row[1]), int(row[2])))
 
         conn.commit()
         cursor.close()
@@ -724,6 +723,7 @@ def handle_restore(message):
 
     except Exception as e:
         bot.reply_to(message, f"❌ Xato: {e}")
+
 
 @bot.message_handler(func=lambda m: m.text == "📢 Xabar yuborish")
 def start_broadcast(message):
@@ -789,21 +789,7 @@ def broad_send(message):
         "Admin paneli:",
         reply_markup=admin_keyboard()
     )
-
-@bot.message_handler(func=lambda m: m.text == "🎲 Tasodifiy hikmat")
-def random_hikmat_button(message):
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton(
-        "🎲 Hikmatni olish",
-        callback_data="get_random_hikmat"
-    ))
-
-    bot.send_message(
-        message.chat.id,
-        "🎲 Tasodifiy hikmat olish uchun tugmani bosing:",
-        reply_markup=markup
-)
-        
+       
 
             
 @bot.message_handler(func=lambda m: m.text == "📚 Saqlangan hikmatlar")
