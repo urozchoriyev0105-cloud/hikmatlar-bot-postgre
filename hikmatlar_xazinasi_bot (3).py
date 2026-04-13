@@ -9,65 +9,53 @@ from pathlib import Path
 from flask import Flask
 from threading import Thread
 
-app = Flask('')
+app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Bot faol ishlamoqda!" # UptimeRobot buni tekshiradi
+    return "Bot faol ishlamoqda!"
 
 def run():
-    # PythonAnywhere bepul porti
-    app.run(host='0.0.0.0', port=8080)
+    app.run(host='0.0.0.0', port=10000)  # Render uchun 10000
 
 def keep_alive():
     t = Thread(target=run)
     t.start()
 
-# Telebot va Proxy uchun kerakli importlar
+# Telebot
 import telebot
 from telebot import types, apihelper
 from dotenv import load_dotenv
 
-
-
-# 1. .env faylini to'g'ri yuklash (PythonAnywhere uchun eng xavfsiz yo'l)
+# .env yuklash
 base_dir = Path(__file__).resolve().parent
 env_path = base_dir / '.env'
 load_dotenv(dotenv_path=env_path)
 
-# 3. .env faylidan ma'lumotlarni o'qib olish
 TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = os.getenv("ADMIN_ID")
 
-# Admin ID ni raqamga o'girib olamiz (agar u mavjud bo'lsa)
 if ADMIN_ID:
     ADMIN_ID = int(ADMIN_ID)
 
-# 4. Botni ishga tushirish
 if not TOKEN:
-    raise ValueError("Xato: BOT_TOKEN .env faylidan topilmadi!")
+    raise ValueError("BOT_TOKEN topilmadi!")
 
 bot = telebot.TeleBot(TOKEN)
 
-# --- Sizning qolgan kodlaringiz (Bazaga ulanish va h.k.) ---
-
 START_DATE = datetime(2026, 4, 12).date()
 
-# Render'dan keladigan maxsus ulanish havolasi
-DATABASE_URL = os.environ.get('DATABASE_URL')
+DATABASE_URL = os.getenv('DATABASE_URL')
 
 def get_db_connection():
-    conn = psycopg2.connect(DATABASE_URL, sslmode='require')
-    return conn
+    return psycopg2.connect(DATABASE_URL, sslmode='require')
 
-
-# 2-BLOK: Barcha jadvallarni yaratish
+# TABLE yaratish
 conn = get_db_connection()
 cursor = conn.cursor()
 
-# 1. Users jadvali
 cursor.execute('''CREATE TABLE IF NOT EXISTS users (
-    user_id INTEGER PRIMARY KEY,
+    user_id BIGINT PRIMARY KEY,
     first_name TEXT,
     username TEXT,
     phone TEXT,
@@ -75,7 +63,6 @@ cursor.execute('''CREATE TABLE IF NOT EXISTS users (
     last_sent_index INTEGER DEFAULT -1
 )''')
 
-# Hikmatlar jadvali (PostgreSQL varianti)
 cursor.execute('''CREATE TABLE IF NOT EXISTS hikmatlar (
     id SERIAL PRIMARY KEY,
     secret_id INTEGER,
@@ -84,40 +71,36 @@ cursor.execute('''CREATE TABLE IF NOT EXISTS hikmatlar (
     public_id INTEGER
 )''')
 
-# 3. Random limits jadvali (Skrinshotdagi xato aynan shu yerda edi)
 cursor.execute('''CREATE TABLE IF NOT EXISTS random_limits (
-    user_id INTEGER,
+    user_id BIGINT,
     last_key TEXT,
     PRIMARY KEY (user_id, last_key)
 )''')
 
-# 4. Seen hikmatlar jadvali
 cursor.execute('''CREATE TABLE IF NOT EXISTS seen_hikmatlar (
-    user_id INTEGER,
+    user_id BIGINT,
     hikmat_id INTEGER,
     PRIMARY KEY (user_id, hikmat_id)
 )''')
 
 conn.commit()
-conn.close() # HAMMA ISH TUGAGACH, FAQAT BIR MARTA YOPING!
+conn.close()
 
 def add_user_to_db(user_id, first_name, username, phone):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        # 1. Bot ishga tushganidan beri o'tgan kunlarni hisoblaymiz
         today = datetime.now().date()
         days_passed = (today - START_DATE).days
 
-        # 2. Yangi foydalanuvchini joriy kunga tenglab bazaga qo'shamiz
         cursor.execute('''
-    INSERT INTO users (user_id, first_name, username, phone, last_sent_index)
-    VALUES (%s, %s, %s, %s, %s)
-    ON CONFLICT (user_id) DO UPDATE SET
-    first_name = EXCLUDED.first_name,
-    username = EXCLUDED.username,
-    phone = EXCLUDED.phone
-''', (user_id, first_name, username, phone, days_passed))
+        INSERT INTO users (user_id, first_name, username, phone, last_sent_index)
+        VALUES (%s, %s, %s, %s, %s)
+        ON CONFLICT (user_id) DO UPDATE SET
+        first_name = EXCLUDED.first_name,
+        username = EXCLUDED.username,
+        phone = EXCLUDED.phone
+        ''', (user_id, first_name, username, phone, days_passed))
 
         conn.commit()
     except Exception as e:
@@ -125,23 +108,18 @@ def add_user_to_db(user_id, first_name, username, phone):
     finally:
         conn.close()
 
-
-
-
-
 # --- SOZLAMALAR ---
 
-# 1. Majburiy obuna kanali
 CHECK_CHANNELS = [
     {"id": -1003729356888, "link": "https://t.me/my_botstg"}
 ]
 
-# 2. Kanal sozlamalari
-ARCHIVE_CHANNEL_ID = -1003821513746 # Arxiv kanal ID (Linkdan olindi)
+ARCHIVE_CHANNEL_ID = -1003821513746
 ARCHIVE_LINK = "https://t.me/hikmatlar_xazinasi_tg"
 SECRET_STORAGE_ID = -1003790411151
+
+
 def get_clock_emoji(time_str):
-    # time_str masalan "08:30" formatida keladi
     clocks = {
         "05:00": "🕔", "05:30": "🕠", "06:00": "🕕", "06:30": "🕡",
         "07:00": "🕖", "07:30": "🕢", "08:00": "🕗", "08:30": "🕣",
@@ -153,56 +131,65 @@ def get_clock_emoji(time_str):
         "19:00": "🕖", "19:30": "🕢", "20:00": "🕗", "20:30": "🕣",
         "21:00": "🕘", "21:30": "🕤", "22:00": "🕙"
     }
-    return clocks.get(time_str, "⏰") # Agar ro'yxatda bo'lmasa, oddiy budilnik emojisi
+    return clocks.get(time_str, "⏰")
 
 
-# 3. Salomlashish matni
 def get_welcome_text(user_id):
     conn = get_db_connection()
     cursor = conn.cursor()
 
     cursor.execute("SELECT time1 FROM users WHERE user_id = %s", (user_id,))
     res = cursor.fetchone()
+
     conn.close()
 
     t1 = res[0] if res else "07:00"
     emoji1 = get_clock_emoji(t1)
 
-    text = (
+    return (
         "<b>Assalamu alaykum va rohmatullohi va barokatuh!</b> 🌿\n\n"
         "<b>\"Hikmatlar Xazinasi\" botiga xush kelibsiz!</b> ✨\n\n"
         "<b>📅 Ishga tushirildi: 12.04.2026 ✅</b>\n\n"
         f"<b>{emoji1} {t1} yuborish 🇺🇿 vaqti</b>\n\n"
         "<b>🗓 Bot 🤖 har kuni sizga kunlik hikmatni taqdim etadi ✅</b>"
     )
-    return text
 
 
 # --- FUNKSIYALAR ---
+
 def is_subscribed(user_id):
     for channel in CHECK_CHANNELS:
         try:
             status = bot.get_chat_member(channel['id'], user_id).status
-            if status in ['left', 'kicked']: return False
-        except: return False
+            if status in ['left', 'kicked']:
+                return False
+        except:
+            return False
     return True
-
 
 
 def time_settings_markup(step=1, show_cancel=False):
     markup = types.InlineKeyboardMarkup(row_width=4)
+
     times = []
     for h in range(5, 23):
         times.append(f"{h:02d}:00")
         if h < 22:
             times.append(f"{h:02d}:30")
 
-    buttons = [types.InlineKeyboardButton(text=t, callback_data=f"st_{step}_{t}") for t in times]
+    buttons = [
+        types.InlineKeyboardButton(text=t, callback_data=f"st_{step}_{t}")
+        for t in times
+    ]
     markup.add(*buttons)
 
-    # Faqat vaqtni o'zgartirishda chiqadi, yangi foydalanuvchida emas
     if show_cancel:
-        markup.add(types.InlineKeyboardButton(text="⬅️ Bekor qilish", callback_data="cancel_time_change"))
+        markup.add(
+            types.InlineKeyboardButton(
+                text="⬅️ Bekor qilish",
+                callback_data="cancel_time_change"
+            )
+        )
 
     return markup
 
@@ -210,29 +197,28 @@ def time_settings_markup(step=1, show_cancel=False):
 # --- KLAVIATURALAR--- #
 def main_keyboard(user_id):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+
     markup.add(types.KeyboardButton("/start"))
     markup.add("📚 Saqlangan hikmatlar", "🎲 Tasodifiy hikmat")
     markup.add("👥 Ulashish ⤴️", "🆘 Yordam")
-    markup.add("⏰ Vaqtni o‘zgartirish") # Bu qatorni ichkariga oldik
+    markup.add("⏰ Vaqtni o‘zgartirish")
 
-    if int(user_id) == ADMIN_ID:
+    if user_id == ADMIN_ID:
         markup.add("⚙️ Admin Panel")
+
     return markup
 
 
-# --- ULASHISH TUGMASI UCHUN JAVOB ---
+# --- ULASHISH ---
 @bot.message_handler(func=lambda m: m.text == "👥 Ulashish ⤴️")
 def share_bot(message):
     markup = types.InlineKeyboardMarkup()
 
-        # Siz xohlagan chiroyli format: 2 ta yangi qator tashlaydi
     share_text = (
         "\n\n👆👆👆👆👆👆👆👆\n\n"
         "Har kuni hikmatlar ulashuvchi botni sizga ham tavsiya qilaman. ✨"
     )
 
-
-    # switch_inline_query_chosen_chat orqali bot nomi chiqmaydigan qildik
     markup.add(types.InlineKeyboardButton(
         text="🚀 Do'stlarga yuborish",
         switch_inline_query_chosen_chat=types.SwitchInlineQueryChosenChat(
@@ -248,6 +234,8 @@ def share_bot(message):
         reply_markup=markup
     )
 
+
+# --- ADMIN PANEL ---
 @bot.message_handler(func=lambda m: m.text == "⚙️ Admin Panel")
 def admin_panel(message):
     if message.from_user.id != ADMIN_ID:
@@ -260,13 +248,13 @@ def admin_panel(message):
     )
 
 
-
 def admin_keyboard():
     markup = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
     markup.add("➕ Hikmat qo'shish", "📝 Navbatni boshqarish")
     markup.add("📊 Statistika", "📢 Xabar yuborish")
-    markup.add("📂 Bazani yuklab olish","⬅️ Orqaga")
+    markup.add("📂 Bazani yuklab olish", "⬅️ Orqaga")
     return markup
+
 
 def ask_for_contact(chat_id):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
@@ -286,7 +274,6 @@ def ask_for_contact(chat_id):
 def start(message):
     user_id = message.from_user.id
 
-    # 1. Majburiy obunani tekshirish
     if not is_subscribed(user_id):
         markup = types.InlineKeyboardMarkup()
         for ch in CHECK_CHANNELS:
@@ -300,7 +287,6 @@ def start(message):
         )
         return
 
-    # 2. SQLite bazasidan foydalanuvchini tekshirish
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT user_id FROM users WHERE user_id = %s", (user_id,))
@@ -308,9 +294,6 @@ def start(message):
     conn.close()
 
     if user_exists:
-        # Foydalanuvchi bazada bo'lsa: Qarzni tekshirish va uzish
-
-
         bot.send_message(
             message.chat.id,
             get_welcome_text(user_id),
@@ -318,19 +301,19 @@ def start(message):
             parse_mode="HTML"
         )
     else:
-        # Yangi foydalanuvchi bo'lsa: Kontakt so'rash
         ask_for_contact(message.chat.id)
 
 
 @bot.callback_query_handler(func=lambda call: call.data == "check")
 def check_callback(call):
     user_id = call.from_user.id
+
     if is_subscribed(user_id):
         bot.delete_message(call.message.chat.id, call.message.message_id)
 
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT user_id FROM users WHERE user_id = ?", (user_id,))
+        cursor.execute("SELECT user_id FROM users WHERE user_id = %s", (user_id,))
         user_exists = cursor.fetchone()
         conn.close()
 
@@ -346,12 +329,11 @@ def check_callback(call):
     else:
         bot.answer_callback_query(call.id, "❌ Siz hali a'zo bo'lmadingiz!", show_alert=True)
 
-
 # --- OBUNA BO'LMAGANLAR UCHUN CHEKLOV ---
 @bot.message_handler(func=lambda message: not is_subscribed(message.from_user.id))
 def restricted_access(message):
     if message.from_user.id == ADMIN_ID:
-        return False
+        return
 
     markup = types.InlineKeyboardMarkup()
     for ch in CHECK_CHANNELS:
@@ -364,35 +346,35 @@ def restricted_access(message):
         reply_markup=markup
     )
 
+
 @bot.message_handler(func=lambda m: m.text == "📊 Statistika")
 def show_stats(message):
+    if message.from_user.id != ADMIN_ID:
+        return
+
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        # 1. Foydalanuvchilar soni
         cursor.execute("SELECT COUNT(*) FROM users")
         total_users = cursor.fetchone()[0]
 
-        # 2. Kanalga hali chiqmagan (navbatdagi) hikmatlar
-        # ESLATMA: status ustuni nomini tekshiring (masalan, status = 0 yoki is_posted = False)
-        cursor.execute("SELECT COUNT(*) FROM hikmatlar WHERE status = 0")
+        # ❗ status TEXT bo‘lgani uchun
+        cursor.execute("SELECT COUNT(*) FROM hikmatlar WHERE status = 'queue'")
         navbat = cursor.fetchone()[0]
 
-        # 3. Oxirgi 15 ta ro'yxatdan o'tgan foydalanuvchi
-        cursor.execute("SELECT user_id, first_name, username FROM users ORDER BY id DESC LIMIT 15")
+        # ❗ users jadvalda id yo‘q
+        cursor.execute("SELECT user_id, first_name, username FROM users ORDER BY user_id DESC LIMIT 15")
         last_users = cursor.fetchall()
 
         stats_text = (
             f"📊 <b>Statistika:</b>\n\n"
             f"👥 <b>Azolar:</b> {total_users}\n"
-            f"⌛ <b>Navbatda:</b> {navbat} ta \n"
+            f"⌛ <b>Navbatda:</b> {navbat} ta\n\n"
             f"👤 <b>Oxirgi 15 foydalanuvchi:</b>\n"
         )
 
-        for u in last_users:
-            u_id, name, uname = u
+        for u_id, name, uname in last_users:
             display_name = name if name else "Ismsiz"
-            display_username = f"@{uname}" if uname else "Yashirin"
             stats_text += f"🔹 <code>{u_id}</code> | {display_name}\n"
 
         bot.send_message(message.chat.id, stats_text, parse_mode="HTML")
@@ -411,65 +393,76 @@ def manage_queue(message):
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # O'ZGARISH: statusidan qat'iy nazar, hali kanalga chiqmaganlarni olish
         cursor.execute("SELECT id, secret_id FROM hikmatlar WHERE is_posted_to_channel = 0")
         hikmatlar = cursor.fetchall()
-        conn.close()
 
         if not hikmatlar:
             bot.send_message(message.chat.id, "📭 Navbatda hikmatlar yo'q.")
+            conn.close()
             return
 
         bot.send_message(message.chat.id, f"📝 Navbatda {len(hikmatlar)} ta hikmat bor.")
 
-        for row in hikmatlar:
-            db_id, secret_id = row
+        for db_id, secret_id in hikmatlar:
             try:
                 markup = types.InlineKeyboardMarkup()
-                # O'chirish tugmasi shu yerda yaratiladi
-                delete_btn = types.InlineKeyboardButton("❌ O'chirish", callback_data=f"sql_del_{db_id}")
-                markup.add(delete_btn)
+                markup.add(types.InlineKeyboardButton(
+                    "❌ O'chirish",
+                    callback_data=f"sql_del_{db_id}"
+                ))
 
-                bot.copy_message(message.chat.id, SECRET_STORAGE_ID, secret_id, reply_markup=markup)
-            except Exception as e:
+                bot.copy_message(
+                    message.chat.id,
+                    SECRET_STORAGE_ID,
+                    secret_id,
+                    reply_markup=markup
+                )
+            except:
                 bot.send_message(message.chat.id, f"❌ Xabar yuklanmadi (ID: {db_id})")
+
+        conn.close()
+
     except Exception as e:
         bot.send_message(message.chat.id, f"❌ Xatolik: {e}")
 
 
-# Navbatdagi hikmatni bazadan o'chirish handler'i
+# --- O‘CHIRISH ---
 @bot.callback_query_handler(func=lambda call: call.data.startswith("sql_del_"))
 def delete_sql_hikmat(call):
     db_id = int(call.data.split("_")[2])
+
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
+
         cursor.execute("DELETE FROM hikmatlar WHERE id = %s", (db_id,))
         conn.commit()
         conn.close()
 
         bot.delete_message(call.message.chat.id, call.message.message_id)
-        bot.answer_callback_query(call.id, "✅ Hikmat navbatdan o'chirildi.")
+        bot.answer_callback_query(call.id, "✅ O‘chirildi")
+
     except Exception as e:
-        bot.answer_callback_query(call.id, f"❌ O'chirishda xato: {e}")
-
-
+        bot.answer_callback_query(call.id, "❌ Xato") 
 
 @bot.message_handler(func=lambda m: m.text == "➕ Hikmat qo'shish" and m.from_user.id == ADMIN_ID)
 def add_h(message):
     msg = bot.send_message(message.chat.id, "✍️ Postni yuboring:")
     bot.register_next_step_handler(msg, save_h)
 
+
 def save_h(message):
     if message.text == "⬅️ Orqaga":
         return
 
     try:
-        # 1. Xabarni maxfiy kanalga nusxalash
-        sent_msg = bot.copy_message(SECRET_STORAGE_ID, message.chat.id, message.message_id)
+        sent_msg = bot.copy_message(
+            SECRET_STORAGE_ID,
+            message.chat.id,
+            message.message_id
+        )
         secret_id = sent_msg.message_id
 
-        # 2. Agar rasm bo'lsa, uning file_id sini aniqlash
         f_id = None
         if message.content_type == 'photo':
             f_id = message.photo[-1].file_id
@@ -479,121 +472,128 @@ def save_h(message):
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # 3. Bazaga saqlash
-        # Agar rasm bo'lsa f_id ni, bo'lmasa 'queue' ni yozamiz
-        # Lekin o'chirish tugmasi chiqishi uchun baribir 'status' ustunidan foydalanamiz
         status_value = f_id if f_id else 'queue'
 
-        cursor.execute("INSERT INTO hikmatlar (secret_id, status) VALUES (%s, %s)", (secret_id, status_value))
+        cursor.execute(
+            "INSERT INTO hikmatlar (secret_id, status) VALUES (%s, %s)",
+            (secret_id, status_value)
+        )
+
         conn.commit()
         conn.close()
 
-        bot.send_message(message.chat.id, "✅ Hikmat saqlandi va navbatga qo'shildi.")
+        bot.send_message(message.chat.id, "✅ Hikmat saqlandi")
+
     except Exception as e:
-        bot.send_message(message.chat.id, f"❌ Xato: {e}")
+        bot.send_message(message.chat.id, "❌ Xato")
 
 
 
-@bot.message_handler(func=lambda m: m.text == "📁 Bazani yuklab olish")
+@bot.message_handler(func=lambda m: m.text == "📂 Bazani yuklab olish")
 def send_db_file_button(message):
     user_id = message.from_user.id
 
-    if str(user_id) != str(ADMIN_ID):
+    if user_id != ADMIN_ID:
         return
 
     try:
         import csv
+
         conn = get_db_connection()
-        cursor = conn.cursor()   
-            file_name = f"backup_{datetime.now().strftime('%Y%m%d')}.csv"
+        cursor = conn.cursor()
 
-            with open(file_name, "w", newline='', encoding='utf-8') as f:
-                writer = csv.writer(f)
+        file_name = f"backup_{datetime.now().strftime('%Y%m%d')}.csv"
 
-                # USERS
-                writer.writerow(['TABLE', 'user_id', 'time1', 'last_sent_index'])
-                cursor.execute("SELECT user_id, time1, last_sent_index FROM users")
-                for row in cursor.fetchall():
-                    writer.writerow(['users', *row])
+        with open(file_name, "w", newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
 
-                # HIKMATLAR
-                writer.writerow(['TABLE', 'id', 'secret_id', 'is_posted_to_channel', 'public_id'])
-                cursor.execute("SELECT id, secret_id, is_posted_to_channel, public_id FROM hikmatlar")
-                for row in cursor.fetchall():
-                    writer.writerow(['hikmatlar', *row])
+            # USERS
+            writer.writerow(['TABLE', 'user_id', 'time1', 'last_sent_index'])
+            cursor.execute("SELECT user_id, time1, last_sent_index FROM users")
+            for row in cursor.fetchall():
+                writer.writerow(['users', *row])
 
-            with open(file_name, "rb") as doc:
-                bot.send_document(message.chat.id, doc, caption="🚀 TO‘LIQ BACKUP")
+            # HIKMATLAR
+            writer.writerow(['TABLE', 'id', 'secret_id', 'is_posted_to_channel', 'public_id'])
+            cursor.execute("SELECT id, secret_id, is_posted_to_channel, public_id FROM hikmatlar")
+            for row in cursor.fetchall():
+                writer.writerow(['hikmatlar', *row])
 
-            cursor.close()
-            conn.close()
-            os.remove(file_name)
+        with open(file_name, "rb") as doc:
+            bot.send_document(message.chat.id, doc, caption="🚀 TO‘LIQ BACKUP")
 
-        except Exception as e:
-            bot.send_message(message.chat.id, f"❌ Xato: {e}")
+        cursor.close()
+        conn.close()
+        os.remove(file_name)
+
+    except Exception as e:
+        bot.send_message(message.chat.id, f"❌ Xato: {e}")
+
 
 @bot.message_handler(content_types=['document'])
 def handle_restore(message):
-    if str(message.from_user.id) == str(ADMIN_ID):
-        if message.document.file_name.endswith('.csv'):
-            try:
-                file_info = bot.get_file(message.document.file_id)
-                downloaded_file = bot.download_file(file_info.file_path)
+    if message.from_user.id != ADMIN_ID:
+        return
 
-                with open("temp_restore.csv", 'wb') as f:
-                    f.write(downloaded_file)
+    if not message.document.file_name.endswith('.csv'):
+        return
 
-                import csv
-                conn = get_db_connection()
-                cursor = conn.cursor()
+    try:
+        file_info = bot.get_file(message.document.file_id)
+        downloaded_file = bot.download_file(file_info.file_path)
 
-                with open("temp_restore.csv", 'r', encoding='utf-8') as f:
-                    reader = csv.reader(f)
-                    next(reader)
+        with open("temp_restore.csv", 'wb') as f:
+            f.write(downloaded_file)
 
-                    for row in reader:
-                        if row[0] == 'users':
-                            cursor.execute("""
-                                INSERT INTO users (user_id, time1, last_sent_index)
-                                VALUES (%s, %s, %s)
-                                ON CONFLICT (user_id) DO UPDATE
-                                SET time1 = EXCLUDED.time1,
-                                    last_sent_index = EXCLUDED.last_sent_index
-                            """, (
-                                int(row[1]),
-                                row[2],
-                                int(row[3])
-                            ))
+        import csv
+        conn = get_db_connection()
+        cursor = conn.cursor()
 
-                        elif row[0] == 'hikmatlar':
-                            cursor.execute("""
-                                INSERT INTO hikmatlar (id, secret_id, is_posted_to_channel, public_id)
-                                VALUES (%s, %s, %s, %s)
-                                ON CONFLICT (id) DO UPDATE
-                                SET is_posted_to_channel = EXCLUDED.is_posted_to_channel,
-                                    public_id = EXCLUDED.public_id
-                            """, (
-                                int(row[1]),
-                                int(row[2]),
-                                int(row[3]),
-                                int(row[4]) if row[4] else None
-                            ))
+        with open("temp_restore.csv", 'r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            next(reader)
 
-                conn.commit()
-                cursor.close()
-                conn.close()
-                os.remove("temp_restore.csv")
+            for row in reader:
+                if row[0] == 'users':
+                    cursor.execute("""
+                        INSERT INTO users (user_id, time1, last_sent_index)
+                        VALUES (%s, %s, %s)
+                        ON CONFLICT (user_id) DO UPDATE
+                        SET time1 = EXCLUDED.time1,
+                            last_sent_index = EXCLUDED.last_sent_index
+                    """, (
+                        int(row[1]),
+                        row[2],
+                        int(row[3])
+                    ))
 
-                bot.reply_to(message, "✅ TO‘LIQ tiklandi!")
+                elif row[0] == 'hikmatlar':
+                    cursor.execute("""
+                        INSERT INTO hikmatlar (id, secret_id, is_posted_to_channel, public_id)
+                        VALUES (%s, %s, %s, %s)
+                        ON CONFLICT (id) DO UPDATE
+                        SET is_posted_to_channel = EXCLUDED.is_posted_to_channel,
+                            public_id = EXCLUDED.public_id
+                    """, (
+                        int(row[1]),
+                        int(row[2]),
+                        int(row[3]),
+                        int(row[4]) if row[4] else None
+                    ))
 
-            except Exception as e:
-                bot.reply_to(message, f"❌ Xato: {e}")
+        conn.commit()
+        cursor.close()
+        conn.close()
+        os.remove("temp_restore.csv")
 
+        bot.reply_to(message, "✅ Tiklandi")
 
+    except Exception as e:
+        bot.reply_to(message, "❌ Xato")  
 
 @bot.message_handler(func=lambda m: m.text == "📢 Xabar yuborish")
 def start_broadcast(message):
-    if str(message.from_user.id) != str(ADMIN_ID):
+    if message.from_user.id != ADMIN_ID:
         return
 
     back_markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -604,16 +604,16 @@ def start_broadcast(message):
         "📢 Xabarni yuboring:",
         reply_markup=back_markup
     )
-    # MUHIM: Bu yerdagi nom pastdagi funksiya nomi bilan bir xil bo'lishi shart!
+
     bot.register_next_step_handler(msg, broad_send)
 
+
 def broad_send(message):
-    # 1. Orqaga qaytishni tekshirish
     if message.text == "⬅️ Orqaga":
         bot.send_message(
             message.chat.id,
             "Bekor qilindi.",
-            reply_markup=admin_keyboard() # Admin panelga qaytish
+            reply_markup=admin_keyboard()
         )
         return
 
@@ -622,43 +622,48 @@ def broad_send(message):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
+
         cursor.execute("SELECT user_id FROM users")
         users = cursor.fetchall()
+
         conn.close()
 
         count = 0
-        for user in users:
+
+        for (user_id,) in users:
             try:
-                # user[0] SQLite tuple formatini to'g'irlaydi
-                bot.send_message(user[0], msg_text)
+                bot.send_message(user_id, msg_text)
                 count += 1
             except:
                 continue
 
         bot.send_message(
             message.chat.id,
-            f"✅ Xabar {count} ta foydalanuvchiga yuborildi.",
+            f"✅ {count} ta foydalanuvchiga yuborildi",
             reply_markup=admin_keyboard()
         )
 
-    except Exception as e:
-        bot.send_message(message.chat.id, f"❌ Xatolik yuz berdi: {str(e)}", reply_markup=admin_keyboard())
+    except Exception:
+        bot.send_message(
+            message.chat.id,
+            "❌ Xatolik",
+            reply_markup=admin_keyboard() 
 
+            bot.send_message(
+            message.chat.id,
+            "Admin paneli:",
+            reply_markup=admin_keyboard()
+        )
 
-
-        # 3. Yuborgandan keyin Admin paneliga qaytarish
-        bot.send_message(message.chat.id, "Admin paneli:", reply_markup=admin_keyboard())
-
-    except Exception as e:
-        bot.send_message(message.chat.id, f"❌ Bazadan o'qishda xatolik: {e}")
-
+    except Exception:
+        bot.send_message(message.chat.id, "❌ Xato")
 
 
 @bot.message_handler(func=lambda m: m.text == "📚 Saqlangan hikmatlar")
 def show_archive(message):
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton("🌐 Arxivni ko'rish", url=ARCHIVE_LINK))
-    # Siz bergan matn HTML formatida:
+
     archive_text = (
         "📚 <b>Hikmatlar xazinasi arxivi</b>\n\n"
         "Barcha hikmatlar arxiv kanalda tartib bilan saqlanadi.\n\n"
@@ -679,70 +684,64 @@ def show_archive(message):
         reply_markup=markup
     )
 
+    # ✅ ASOSIY MENYU QAYTARILDI
+    bot.send_message(
+        message.chat.id,
+        "Asosiy menyu",
+        reply_markup=main_keyboard(message.from_user.id)
+    )
+    )
 
-    # ASOSIY MENYUNI CHIQARISH (Sizda aynan shu qismi yo'q edi)
-    reply_markup=main_keyboard(user_id)
 
 @bot.message_handler(content_types=['contact'])
 def contact_handler(message):
-    if message.contact:
-        user_id = message.from_user.id
-        first_name = message.from_user.first_name
-        # Username bor-yo'qligini tekshirish
-        username = f"@{message.from_user.username}" if message.from_user.username else "Usernamesiz"
-        phone = message.contact.phone_number
+    if not message.contact:
+        return
 
-        conn = get_db_connection()
-        cursor = conn.cursor()
+    user_id = message.from_user.id
+    first_name = message.from_user.first_name
+    username = f"@{message.from_user.username}" if message.from_user.username else "Usernamesiz"
+    phone = message.contact.phone_number
 
-        # 1. Avval user bor-yo‘qligini tekshiramiz
-        cursor.execute("SELECT last_sent_index FROM users WHERE user_id = ?", (user_id,))
-        existing_user = cursor.fetchone()
-
-        if existing_user:
-            # 2. Agar user bo'lsa, faqat ism va raqamni yangilaymiz (indexga tegmaymiz!)
-            cursor.execute("""
-                UPDATE users
-                SET first_name = %s, username = %s, phone = %s
-                WHERE user_id = %s
-            """, (first_name, username, phone, user_id))
-            print(f"🔄 User yangilandi: {user_id}")
-        else:
-            # 3. Agar yangi user bo'lsa, uni bazaga qo'shamiz
-            # last_sent_index = -1 qilsangiz, timer 0-indexdan (1-hikmatdan) boshlaydi
-            cursor.execute("""
-                INSERT INTO users (user_id, first_name, username, phone, last_sent_index)
-                VALUES (%s, %s, %s, %s, -1)
-            """, (user_id, first_name, username, phone))
-            print(f"🆕 Yangi user qo'shildi: {user_id}")
-
-        conn.commit()
-        conn.close()
-
-        # Tugmani o‘chirish (ReplyKeyboardRemove)
-        remove_kb = types.ReplyKeyboardRemove()
-        bot.send_message(message.chat.id, "✅ Muvaffaqiyatli tasdiqlandi!", reply_markup=remove_kb)
-
-        # Vaqt tanlash bosqichiga o'tkazish
-        bot.send_message(
-            message.chat.id,
-            "Endi hikmatlar yuboriladigan vaqtni tanlang:",
-            reply_markup=time_settings_markup(step=1, show_cancel=False)
-        )
-
-
-
-
-
-@bot.message_handler(func=lambda message: "Vaqtni o‘zgartirish" in message.text)
-def change_time_start(message):
-    user_id = message.chat.id
-
-    # DB ulanish
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Hozirgi vaqtni olish
+    # ❗ %s ishlatildi (PostgreSQL uchun)
+    cursor.execute("SELECT last_sent_index FROM users WHERE user_id = %s", (user_id,))
+    existing_user = cursor.fetchone()
+
+    if existing_user:
+        cursor.execute("""
+            UPDATE users
+            SET first_name = %s, username = %s, phone = %s
+            WHERE user_id = %s
+        """, (first_name, username, phone, user_id))
+    else:
+        cursor.execute("""
+            INSERT INTO users (user_id, first_name, username, phone, last_sent_index)
+            VALUES (%s, %s, %s, %s, -1)
+        """, (user_id, first_name, username, phone))
+
+    conn.commit()
+    conn.close()
+
+    remove_kb = types.ReplyKeyboardRemove()
+    bot.send_message(message.chat.id, "✅ Tasdiqlandi", reply_markup=remove_kb)
+
+    bot.send_message(
+        message.chat.id,
+        "Vaqtni tanlang:",
+        reply_markup=time_settings_markup(step=1, show_cancel=False)
+        )
+
+
+@bot.message_handler(func=lambda message: message.text and "Vaqtni o‘zgartirish" in message.text)
+def change_time_start(message):
+    user_id = message.from_user.id
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
     cursor.execute("SELECT time1 FROM users WHERE user_id = %s", (user_id,))
     user_data = cursor.fetchone()
 
@@ -753,15 +752,16 @@ def change_time_start(message):
     if user_data:
         msg_text += f"Hozirgi vaqtingiz: <b>{user_data[0]}</b>\n\n"
 
-    msg_text += "Hikmat yuboriladigan yangi vaqtni tanlang:"
+    msg_text += "Yangi vaqtni tanlang:"
 
     bot.send_message(
         message.chat.id,
         msg_text,
-        # Bu yerda True yozilgani uchun 'Bekor qilish' tugmasi CHIQADI
         reply_markup=time_settings_markup(step=1, show_cancel=True),
         parse_mode="HTML"
     )
+
+
 @bot.callback_query_handler(func=lambda call: call.data.startswith("st_"))
 def handle_time_selection(call):
     user_id = call.from_user.id
@@ -774,78 +774,39 @@ def handle_time_selection(call):
 
     conn = get_db_connection()
     cursor = conn.cursor()
+
     try:
-        # 1. Bazada vaqtni yangilash
-        cursor.execute("UPDATE users SET time1 = ? WHERE user_id = %s", (selected_time, user_id))
+        # ❗ %s ishlatildi
+        cursor.execute(
+            "UPDATE users SET time1 = %s WHERE user_id = %s",
+            (selected_time, user_id)
+        )
         conn.commit()
 
-        # 2. Eski tugmali xabarni o'chirish
         bot.delete_message(call.message.chat.id, call.message.message_id)
 
-        # 3. Muvaffaqiyatli xabarni yuborish
-        welcome_text = get_welcome_text(user_id)
         bot.send_message(
             user_id,
-            f"✅ Vaqt <b>{selected_time}</b> ga muvaffaqiyatli sozlandi!\n\n{welcome_text}",
-            reply_markup=main_keyboard(user_id), # Asosiy menyu tugmalari
-            parse_mode="HTML"
+            f"✅ Vaqt {selected_time} ga sozlandi",
+            reply_markup=main_keyboard(user_id)
         )
-    except Exception as e:
-        bot.answer_callback_query(call.id, "❌ Xatolik yuz berdi")
+
+    except:
+        bot.answer_callback_query(call.id, "❌ Xato")
+
     finally:
         conn.close()
+
 
 @bot.callback_query_handler(func=lambda call: call.data == "cancel_time_change")
 def cancel_time(call):
     bot.delete_message(call.message.chat.id, call.message.message_id)
+
     bot.send_message(
         call.message.chat.id,
-         "Bekor qilindi.",
+        "Bekor qilindi",
         reply_markup=main_keyboard(call.from_user.id)
-    )
-
-
-
-@bot.message_handler(func=lambda m: m.text == "🎲 Tasodifiy hikmat")
-def ask_for_random_hikmat(message):
-    # Bu yerda foydalanuvchiga tushuntirish xati va Inline tugma yuboramiz
-    markup = types.InlineKeyboardMarkup()
-    btn = types.InlineKeyboardButton("✨ Hikmatni ko'rish", callback_data="get_random_hikmat")
-    markup.add(btn)
-
-    text = (
-        "📝 **Eslatma:** Ushbu hikmatlar shu vaqtgacha bot tomonidan taqdim etilgan (arxivdagi) xabarlar ichidan tasodifiy olinadi.\n\n"
-        "🎯 **Eng muhimi:** Bot har bir foydalanuvchiga turlicha hikmatlar beradi va bir marta taqdim etilgan hikmatni sizga qayta yubormaydi.\n\n"
-        "💡 *Ushbu tasodifiy hikmat balki siz uchun muhim eslatma bo‘lishi mumkin!!!*"
-         )
-
-    bot.send_message(message.chat.id, text, parse_mode="Markdown", reply_markup=markup)
-
-@bot.message_handler(func=lambda m: m.text == "⬅️ Orqaga")
-def back(message):
-    bot.send_message(message.chat.id, "Asosiy menyu", reply_markup=main_keyboard(message.from_user.id))
-
-
-
-@bot.message_handler(func=lambda message: message.text == "🆘 Yordam")
-def help_handler(message):
-    # Siz bergan matn aynan o'zidek:
-    help_text = (
-        "⚠️ <b>Texnik ogohlantirish:</b>\n\n"
-        "Bot server orqali avtomatik rejimda ishlaydi. Ba'zida texnik sabablar yoki internet nosozliklari "
-        "tufayli xabarlar belgilangan vaqtdan biroz kechikishi mumkin. Bunday holatlarda to'g'ri "
-        "tushunasiz degan umiddaman.\n\n"
-        "📩 <b>Aloqa va murojaat:</b>\n\n"
-        "Agar bot ishlamay qolsa yoki fikr-mulohaza takliflaringiz bo'lsa, aloqa botimiz orqali murojaat qilishingiz mumkin."
-    )
-
-    # Matn tagidagi inline tugma
-    markup = types.InlineKeyboardMarkup()
-    btn_contact = types.InlineKeyboardButton(text="✍️ Aloqa botiga o'tish", url="https://t.me/my_botstg_aloqabot")
-    markup.add(btn_contact)
-
-    bot.send_message(message.chat.id, help_text, parse_mode='HTML', reply_markup=markup)
-
+)
 
 @bot.callback_query_handler(func=lambda call: call.data == "get_random_hikmat")
 def handle_random_hikmat_callback(call):
@@ -864,24 +825,29 @@ def handle_random_hikmat_callback(call):
 
     conn = get_db_connection()
     cursor = conn.cursor()
+
     try:
-        # 0. ARXIV TO'LGANINI TEKSHIRISH (YANGI QISM)
+        # --- 0. ARXIV + KUN HISOBI ---
         cursor.execute("SELECT COUNT(*) FROM hikmatlar WHERE is_posted_to_channel = 1")
         count = cursor.fetchone()[0]
 
-        if count < 30: # <--- Bu qator tepadagi 'cursor' bilan bir chiziqda bo'lishi kerak
-            qolgan_kun = 30 - count
-            ogohlantirish = (
-                f"⚠️ Arxivda kamida 30 ta hikmat boʻlishi kerak\n\n"
-                f"⏳ Bu funksiya ochilishiga {qolgan_kun} kun qoldi"
+        today = datetime.now(tashkent_tz).date()
+        days_passed = (today - START_DATE).days + 1
+
+        # ENG MUHIM (kun bilan sync)
+        real_days = min(count, days_passed)
+
+        if real_days < 30:
+            qolgan_kun = 30 - real_days
+
+            bot.answer_callback_query(
+                call.id,
+                text=f"⚠️ Arxivda kamida 30 ta hikmat boʻlishi kerak.\n\n⏳ Bu funsiya ochilishiga {qolgan_kun} kun qoldi",
+                show_alert=True
             )
-            bot.answer_callback_query(call.id, text=ogohlantirish, show_alert=True)
-            conn.close()
-            return # Funksiyani shu yerda to'xtatadi
+            return
 
-
-
-        # ✅ 1. LIMIT TEKSHIRISH
+        # --- 1. LIMIT TEKSHIRISH ---
         cursor.execute(
             "SELECT 1 FROM random_limits WHERE user_id = %s AND last_key = %s",
             (user_id, today_key)
@@ -895,7 +861,7 @@ def handle_random_hikmat_callback(call):
             )
             return
 
-        # ✅ 2. FOYDALANUVCHI KO‘RMAGAN HIKMAT
+        # --- 2. FOYDALANUVCHI KO‘RMAGAN HIKMAT ---
         cursor.execute("""
             SELECT id, secret_id FROM hikmatlar
             WHERE is_posted_to_channel = 1
@@ -908,7 +874,7 @@ def handle_random_hikmat_callback(call):
 
         res = cursor.fetchone()
 
-        # ✅ 3. AGAR HAMMASINI KO‘RGAN BO‘LSA
+        # --- 3. AGAR HAMMASINI KO‘RGAN BO‘LSA ---
         if not res:
             cursor.execute("""
                 SELECT id, secret_id FROM hikmatlar
@@ -918,39 +884,39 @@ def handle_random_hikmat_callback(call):
             """)
             res = cursor.fetchone()
 
-            if res:
-                  hikmat_id, secret_id = res
-
-            # --- YANGI QO'SHILADIGAN QISMI ---
-            cursor.execute("SELECT COUNT(*) FROM hikmatlar WHERE id < ?", (hikmat_id,))
-            h_idx = cursor.fetchone()[0]
-
-                        # Xabarni yangilash
-            # 1. Avval yangi hikmatni tugma bilan yuboramiz
-            bot.copy_message(call.message.chat.id, SECRET_STORAGE_ID, secret_id, reply_markup=markup)
-
-            # 2. Keyin eski "Hikmatni ko'rish" tugmasi bor xabarni o'chiramiz
-            bot.delete_message(call.message.chat.id, call.message.message_id)
-
-            # Xabarni yangilash
-            bot.delete_message(call.message.chat.id, call.message.message_id)
-            bot.copy_message(call.message.chat.id, SECRET_STORAGE_ID, secret_id)
-
-            # ✅ 4. LIMITNI YOZISH
-            cursor.execute(
-                "INSERT OR IGNORE INTO random_limits (user_id, last_key) VALUES (%s, %s)",
-                (user_id, today_key)
-            )
-
-            # ✅ 5. KO‘RILGAN HIKMATNI YOZISH (MUHIM!)
-            cursor.execute(
-                "INSERT OR IGNORE INTO seen_hikmatlar (user_id, hikmat_id) VALUES (%s, %s)",
-                 (user_id, hikmat_id)
-
-            conn.commit()
-
-        else:
+        if not res:
             bot.answer_callback_query(call.id, "📭 Arxivda hikmat topilmadi", show_alert=True)
+            return
+
+        hikmat_id, secret_id = res
+
+        # --- 4. HIKMATNI YUBORISH ---
+        bot.copy_message(call.message.chat.id, SECRET_STORAGE_ID, secret_id)
+
+        # eski tugmali xabarni o‘chirish
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+
+        # --- 5. LIMITNI YOZISH ---
+        cursor.execute(
+            """
+            INSERT INTO random_limits (user_id, last_key)
+            VALUES (%s, %s)
+            ON CONFLICT DO NOTHING
+            """,
+            (user_id, today_key)
+        )
+
+        # --- 6. KO‘RILGAN HIKMATNI YOZISH ---
+        cursor.execute(
+            """
+            INSERT INTO seen_hikmatlar (user_id, hikmat_id)
+            VALUES (%s, %s)
+            ON CONFLICT DO NOTHING
+            """,
+            (user_id, hikmat_id)
+        )
+
+        conn.commit()
 
     except Exception as e:
         print(f"Xato: {e}")
@@ -959,18 +925,11 @@ def handle_random_hikmat_callback(call):
     finally:
         conn.close()
 
-# --- BU YERDAN SMART TIMER BOSHLANADI ---
 
 
 
-def get_hikmat_by_index(idx):
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT secret_id FROM hikmatlar LIMIT 1 OFFSET %s", (idx,))
-    res = cursor.fetchone()
-    conn.close()
-    return res[0] if res else None
+
 
 
 
