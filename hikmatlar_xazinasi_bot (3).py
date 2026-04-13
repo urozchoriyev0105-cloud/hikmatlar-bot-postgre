@@ -346,9 +346,6 @@ def restricted_access(message):
         reply_markup=markup
     )
 
-
-@bot.message_handler(func=lambda m: m.text == "📊 Statistika")
-
            
 @bot.message_handler(func=lambda m: m.text == "📝 Navbatni boshqarish" and m.from_user.id == ADMIN_ID)
 def manage_queue(message):
