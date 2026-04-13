@@ -274,7 +274,13 @@ def ask_for_contact(chat_id):
 
     bot.send_message(chat_id, text, parse_mode="HTML", reply_markup=markup)
 
-
+@bot.message_handler(func=lambda m: m.text == "⬅️ Orqaga")
+def back_to_main(message):
+    bot.send_message(
+        message.chat.id,
+        "Asosiy menyu",
+        reply_markup=main_keyboard(message.from_user.id)
+    )
 # --- START VA OBUNA ---
 @bot.message_handler(commands=['start'])
 def start(message):
@@ -335,30 +341,6 @@ def check_callback(call):
     else:
         bot.answer_callback_query(call.id, "❌ Siz hali a'zo bo'lmadingiz!", show_alert=True)
 
-# --- OBUNA BO'LMAGANLAR UCHUN CHEKLOV ---
-@bot.message_handler(func=lambda message: not is_subscribed(message.from_user.id))
-def restricted_access(message):
-    if message.from_user.id == ADMIN_ID:
-        return
-
-    markup = types.InlineKeyboardMarkup()
-    for ch in CHECK_CHANNELS:
-        markup.add(types.InlineKeyboardButton("Kanalga a'zo bo'lish", url=ch['link']))
-    markup.add(types.InlineKeyboardButton("✅ Tekshirish", callback_data="check"))
-
-    bot.send_message(
-        message.chat.id,
-        "Kechirasiz, davom etish uchun kanalga a'zo bo'lishingiz kerak:",
-        reply_markup=markup
-    ) 
-
-@bot.message_handler(func=lambda m: m.text == "⬅️ Orqaga")
-def back_to_main(message):
-    bot.send_message(
-        message.chat.id,
-        "Asosiy menyu",
-        reply_markup=main_keyboard(message.from_user.id)
-    )
 
            
 @bot.message_handler(func=lambda m: m.text == "📝 Navbatni boshqarish" and m.from_user.id == ADMIN_ID)
@@ -1054,6 +1036,24 @@ def handle_random_hikmat_callback(call):
         conn.close()
 
 
+
+
+# --- OBUNA BO'LMAGANLAR UCHUN CHEKLOV ---
+@bot.message_handler(func=lambda message: not is_subscribed(message.from_user.id))
+def restricted_access(message):
+    if message.from_user.id == ADMIN_ID:
+        return
+
+    markup = types.InlineKeyboardMarkup()
+    for ch in CHECK_CHANNELS:
+        markup.add(types.InlineKeyboardButton("Kanalga a'zo bo'lish", url=ch['link']))
+    markup.add(types.InlineKeyboardButton("✅ Tekshirish", callback_data="check"))
+
+    bot.send_message(
+        message.chat.id,
+        "Kechirasiz, davom etish uchun kanalga a'zo bo'lishingiz kerak:",
+        reply_markup=markup
+    ) 
 
 
 
