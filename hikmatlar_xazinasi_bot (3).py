@@ -580,7 +580,7 @@ def top_hikmatlar_admin(message):
             return
 
         text = "🏆 <b>TOP 10 RANDOM HIKMAT</b>\n\n"
-        markup = types.InlineKeyboardMarkup)
+        markup = types.InlineKeyboardMarkup()
 
         for i, (hid, pub_id, count) in enumerate(rows, 1):
 
