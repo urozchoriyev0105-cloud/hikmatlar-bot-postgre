@@ -1180,7 +1180,6 @@ def auto_backup():
         time.sleep(60)
 
 
-
 def smart_timer():
     print("🚀 Smart timer ishga tushdi...")
     tashkent_tz = pytz.timezone('Asia/Tashkent')
@@ -1201,6 +1200,7 @@ def smart_timer():
 
             msg_counter = 0
 
+            # ================== USERLARGA YUBORISH ==================
             for u_id, u_time, last_idx in users:
                 try:
                     # 🆕 YANGI USER
@@ -1208,23 +1208,16 @@ def smart_timer():
                         target_index = days_passed
 
                         cursor.execute(
-                            "SELECT secret_id FROM hikmatlar ORDER BY id ASC LIMIT 1 OFFSET %s",
+                            "SELECT id, secret_id FROM hikmatlar ORDER BY id ASC LIMIT 1 OFFSET %s",
                             (target_index,)
                         )
                         hikmat = cursor.fetchone()
 
                         if hikmat:
-                            bot.copy_message(u_id, SECRET_STORAGE_ID, hikmat[0])
+                            bot.copy_message(u_id, SECRET_STORAGE_ID, hikmat[1])
 
-                            # ✅ STATISTIKA
                             cursor.execute(
-                                "UPDATE users SET daily_count = daily_count + 1 WHERE user_id = %s",
-                                (u_id,)
-                            )
-
-                            # ✅ INDEX
-                            cursor.execute(
-                                "UPDATE users SET last_sent_index = %s WHERE user_id = %s",
+                                "UPDATE users SET daily_count = daily_count + 1, last_sent_index = %s WHERE user_id = %s",
                                 (target_index, u_id)
                             )
 
@@ -1237,23 +1230,16 @@ def smart_timer():
                             next_index = last_idx + 1
 
                             cursor.execute(
-                                "SELECT secret_id FROM hikmatlar ORDER BY id ASC LIMIT 1 OFFSET %s",
+                                "SELECT id, secret_id FROM hikmatlar ORDER BY id ASC LIMIT 1 OFFSET %s",
                                 (next_index,)
                             )
                             hikmat = cursor.fetchone()
 
                             if hikmat:
-                                bot.copy_message(u_id, SECRET_STORAGE_ID, hikmat[0])
+                                bot.copy_message(u_id, SECRET_STORAGE_ID, hikmat[1])
 
-                                # ✅ STATISTIKA
                                 cursor.execute(
-                                    "UPDATE users SET daily_count = daily_count + 1 WHERE user_id = %s",
-                                    (u_id,)
-                                )
-
-                                # ✅ INDEX
-                                cursor.execute(
-                                    "UPDATE users SET last_sent_index = %s WHERE user_id = %s",
+                                    "UPDATE users SET daily_count = daily_count + 1, last_sent_index = %s WHERE user_id = %s",
                                     (next_index, u_id)
                                 )
 
@@ -1271,52 +1257,58 @@ def smart_timer():
                     print(f"User error: {e}")
                     continue
 
-            # 🔵 ARXIV
-            if now.hour >= 7:
-                while True:
+            # ================== ARXIV (100% SAFE) ==================
+            while True:
+                cursor.execute("""
+                    SELECT id, secret_id FROM hikmatlar
+                    WHERE is_posted_to_channel = 0
+                    AND id <= %s
+                    ORDER BY id ASC
+                    LIMIT 1
+                """, (days_passed,))
+
+                hikmat = cursor.fetchone()
+
+                if not hikmat:
+                    break
+
+                try:
+                    sent_msg = bot.copy_message(
+                        ARCHIVE_CHANNEL_ID,
+                        SECRET_STORAGE_ID,
+                        hikmat[1],
+                        disable_notification=True
+                    )
+
+                    # 🔥 DOUBLE-PROTECTION (race condition yo‘q)
                     cursor.execute("""
-                        SELECT id, secret_id FROM hikmatlar
-                        WHERE is_posted_to_channel = 0
-                        ORDER BY id ASC
-                        LIMIT 1
-                    """)
-                    hikmat = cursor.fetchone()
-
-                    if not hikmat:
-                        break
-
-                    if hikmat[0] > days_passed:
-                        break
-
-                    try:
-                        sent_msg = bot.copy_message(
-                            ARCHIVE_CHANNEL_ID,
-                            SECRET_STORAGE_ID,
-                            hikmat[1],
-                            disable_notification=True
-                        )
-
-                        cursor.execute("""
                         UPDATE hikmatlar 
                         SET is_posted_to_channel = 1, public_id = %s 
-                        WHERE id = %s",
-                        """,(sent_msg.message_id, hikmat[0])
-                        )
-                        conn.commit()
+                        WHERE id = %s AND is_posted_to_channel = 0
+                    """, (sent_msg.message_id, hikmat[0]))
 
-                        time.sleep(0.5)
+                    # agar boshqa thread oldin yozgan bo‘lsa — skip
+                    if cursor.rowcount == 0:
+                        conn.rollback()
+                        continue
 
-                    except:
-                        break
+                    conn.commit()
+                    time.sleep(0.5)
+
+                except Exception as e:
+                    print(f"Arxiv xatosi: {e}")
+                    break
 
             conn.close()
 
         except Exception as e:
             print(f"🔥 Timer xato: {e}")
-            if 'conn' in locals():
+            try:
                 conn.close()
+            except:
+                pass
 
-        # 🧠 SMART SLEEP
+        # ================== SMART SLEEP ==================
         if now.hour in [6, 7, 8]:
             time.sleep(15)
         else:
