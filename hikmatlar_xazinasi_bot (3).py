@@ -1482,7 +1482,7 @@ if __name__ == "__main__":
     print("Bot ishga tushdi...")
 
     # 4. Polling (faqat 1 marta)
-    bot.infinity_polling(timeout=20, long_polling_timeout=10)
+    #bot.infinity_polling(timeout=20, long_polling_timeout=10)
     
 
 
