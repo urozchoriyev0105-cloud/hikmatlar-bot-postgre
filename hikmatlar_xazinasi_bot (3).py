@@ -9,7 +9,19 @@ from pathlib import Path
 from flask import Flask
 from threading import Thread 
 from db_update import update_db 
-import csv
+import csv 
+import psutil
+
+def get_system_stats():
+    process = psutil.Process(os.getpid())
+
+    # RAM (MB da)
+    ram = process.memory_info().rss / 1024 / 1024
+
+    # CPU %
+    cpu = psutil.cpu_percent(interval=1)
+
+    return round(ram, 2), cpu
 
 app = Flask(__name__)
 
@@ -493,8 +505,8 @@ def show_stats(message):
 
     try:
         conn = get_db_connection()
-        cursor = conn.cursor()
-
+        cursor = conn.cursor() 
+       
         # 👥 Jami user
         cursor.execute("SELECT COUNT(*) FROM users")
         total_users = cursor.fetchone()[0]
@@ -640,8 +652,20 @@ def top_hikmatlar_admin(message):
         )
 
     except Exception as e:
-        bot.send_message(message.chat.id, f"❌ Xato: {e}")
+        bot.send_message(message.chat.id, f"❌ Xato: {e}") 
 
+
+@bot.message_handler(commands=['server'])
+def server_stats(message):
+    if message.from_user.id != ADMIN_ID:
+        return
+
+    ram, cpu = get_system_stats()
+
+    bot.send_message(
+        message.chat.id,
+        f"🖥 Server holati\n\n💾 RAM: {ram} MB\n⚙️ CPU: {cpu}%"
+    )
 # --- O‘CHIRISH ---
 @bot.callback_query_handler(func=lambda call: call.data.startswith("sql_del_"))
 def delete_sql_hikmat(call):
