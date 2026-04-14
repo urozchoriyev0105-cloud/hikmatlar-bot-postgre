@@ -8,7 +8,8 @@ from datetime import datetime
 from pathlib import Path
 from flask import Flask
 from threading import Thread 
-from db_update import update_db
+from db_update import update_db 
+import csv
 
 app = Flask(__name__)
 
@@ -261,7 +262,7 @@ def admin_keyboard():
     markup.add("➕ Hikmat qo'shish", "📝 Navbatni boshqarish")
     markup.add("📊 Statistika", "📢 Xabar yuborish") 
     markup.add("🏆 TOP Random","📂 Bazani yuklab olish")
-    markup.add("⬅️ Orqaga")
+    markup.add("📥 Zaxira tiklash","⬅️ Orqaga")
     return markup
 
 
@@ -442,7 +443,34 @@ def manage_queue(message):
         conn.close()
 
     except Exception as e:
-        bot.send_message(message.chat.id, f"❌ Xatolik: {e}")
+        bot.send_message(message.chat.id, f"❌ Xatolik: {e}") 
+
+
+
+@bot.message_handler(content_types=['document'])
+def handle_backup_file(message):
+    if message.from_user.id != ADMIN_ID:
+        return
+
+    if not message.document.file_name.endswith('.csv'):
+        return
+
+    file_info = bot.get_file(message.document.file_id)
+    downloaded_file = bot.download_file(file_info.file_path)
+
+    file_path = 'temp_restore.csv'
+    with open(file_path, 'wb') as f:
+        f.write(downloaded_file)
+
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton("✅ Ha, tiklash", callback_data="confirm_restore"))
+    markup.add(types.InlineKeyboardButton("❌ Bekor qilish", callback_data="cancel_restore"))
+
+    bot.send_message(
+        message.chat.id,
+        "📄 Fayl qabul qilindi.\n\nBazani tiklaysizmi?",
+        reply_markup=markup
+    )
 
 def make_user_link(name, uname, user_id):
     # Ism bo‘lmasa
@@ -826,8 +854,17 @@ def handle_restore(message):
         bot.reply_to(message, "✅ FULL tiklandi!")
 
     except Exception as e:
-        bot.reply_to(message, f"❌ Xato: {e}")
+        bot.reply_to(message, f"❌ Xato: {e}"). 
+        
+@bot.message_handler(func=lambda m: m.text == "📥 Zaxira tiklash")
+def restore_menu(message):
+    if message.from_user.id != ADMIN_ID:
+        return
 
+    bot.send_message(
+        message.chat.id,
+        "📤 Iltimos, .csv zaxira faylni yuboring.\n\n⚠️ Bu amal bazani o‘zgartiradi!"
+    )
 
 @bot.message_handler(func=lambda m: m.text == "📢 Xabar yuborish")
 def start_broadcast(message):
