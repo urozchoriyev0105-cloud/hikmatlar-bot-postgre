@@ -767,32 +767,25 @@ def send_db_file_button(message):
 def confirm_restore(call):
     try:
         import csv
-        import os
-
-        # Fayl borligini tekshirish
-        if not os.path.exists("temp_restore.csv"):
-            bot.answer_callback_query(call.id, "❌ Tiklash uchun fayl topilmadi!")
-            return
-
         conn = get_db_connection()
         cursor = conn.cursor()
 
+        # 1. TIKLASHDAN OLDIN BAZANI TOZALASH (TRUNCATE)
+        # Bu buyruq jadvallarni bo'shatadi va ID raqamlarni nollaydi
+        cursor.execute("TRUNCATE TABLE users, hikmatlar, random_limits, seen_hikmatlar RESTART IDENTITY;")
+        
         with open("temp_restore.csv", 'r', encoding='utf-8') as f:
             reader = csv.reader(f)
             
-            # Har bir qatorni birma-bir tahlil qilamiz
             for row in reader:
-                # Bo'sh qator yoki noto'g'ri format bo'lsa tashlab ketamiz
                 if not row or len(row) < 2:
                     continue
                 
-                # DIQQAT: row[1] (ID) raqam bo'lmasa, bu sarlavha (header). 
-                # Shuning uchun uni tashlab ketamiz (Aynan shu joy user_id xatosini oldini oladi)
+                # Sarlavhalarni o'tkazib yuborish
                 if not str(row[1]).replace('-', '').isdigit():
                     continue
 
                 try:
-                    # USERS JADVALINI TIKLASH
                     if row[0] == 'users':
                         cursor.execute("""
                             INSERT INTO users (
@@ -800,83 +793,36 @@ def confirm_restore(call):
                                 time1, last_sent_index, daily_count, random_count
                             )
                             VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
-                            ON CONFLICT (user_id) DO UPDATE SET
-                                first_name=EXCLUDED.first_name,
-                                username=EXCLUDED.username,
-                                phone=EXCLUDED.phone,
-                                time1=EXCLUDED.time1,
-                                last_sent_index=EXCLUDED.last_sent_index,
-                                daily_count=EXCLUDED.daily_count,
-                                random_count=EXCLUDED.random_count
                         """, (
-                            int(row[1]),
-                            row[2] or "",
-                            row[3] or "",
-                            row[4] or "",
-                            row[5] or "07:00",
-                            int(row[6]) if row[6].isdigit() else 0,
-                            int(row[7]) if row[7].isdigit() else 0,
-                            int(row[8]) if row[8].isdigit() else 0
+                            int(row[1]), row[2], row[3], row[4], 
+                            row[5], int(row[6]), int(row[7]), int(row[8])
                         ))
 
-                    # HIKMATLAR JADVALINI TIKLASH
                     elif row[0] == 'hikmatlar':
-                        # public_id ba'zan None bo'lishi mumkin
                         p_id = int(row[5]) if len(row) > 5 and row[5] and row[5].isdigit() else None
-                        
                         cursor.execute("""
                             INSERT INTO hikmatlar (id, secret_id, status, is_posted_to_channel, public_id)
                             VALUES (%s,%s,%s,%s,%s)
-                            ON CONFLICT (id) DO UPDATE SET
-                                status=EXCLUDED.status,
-                                is_posted_to_channel=EXCLUDED.is_posted_to_channel,
-                                public_id=EXCLUDED.public_id
-                        """, (
-                            int(row[1]),
-                            int(row[2]),
-                            row[3],
-                            int(row[4]) if row[4].isdigit() else 0,
-                            p_id
-                        ))
+                        """, (int(row[1]), int(row[2]), row[3], int(row[4]), p_id))
 
-                    # RANDOM LIMITLARNI TIKLASH
                     elif row[0] == 'random_limits':
-                        cursor.execute("""
-                            INSERT INTO random_limits (user_id, last_key)
-                            VALUES (%s,%s)
-                            ON CONFLICT (user_id) DO NOTHING
-                        """, (int(row[1]), row[2]))
+                        cursor.execute("INSERT INTO random_limits (user_id, last_key) VALUES (%s,%s)", (int(row[1]), row[2]))
 
-                    # KO'RILGAN HIKMATLARNI TIKLASH
                     elif row[0] == 'seen_hikmatlar':
-                        cursor.execute("""
-                            INSERT INTO seen_hikmatlar (user_id, hikmat_id)
-                            VALUES (%s,%s)
-                            ON CONFLICT DO NOTHING
-                        """, (int(row[1]), int(row[2])))
+                        cursor.execute("INSERT INTO seen_hikmatlar (user_id, hikmat_id) VALUES (%s,%s)", (int(row[1]), int(row[2])))
 
                 except Exception as row_error:
-                    print(f"⚠️ Qatorda xatolik: {row} -> {row_error}")
                     continue
 
         conn.commit()
         cursor.close()
         conn.close()
 
-        # Vaqtinchalik faylni o'chirib tashlaymiz
-        if os.path.exists("temp_restore.csv"):
-            os.remove("temp_restore.csv")
-
-        bot.edit_message_text(
-            "✅ **TO‘LIQ TIKLANDI!**\n\nBarcha foydalanuvchilar, hikmatlar va statistika muvaffaqiyatli qayta tiklandi.",
-            call.message.chat.id,
-            call.message.message_id,
-            parse_mode="Markdown"
-        )
+        bot.edit_message_text("✅ Baza tozalandi va TO‘LIQ qayta tiklandi!", call.message.chat.id, call.message.message_id)
 
     except Exception as e:
-        bot.send_message(call.message.chat.id, f"❌ Umumiy xatolik yuz berdi: {e}")
-        print(f"Kritik xato: {e}")
+        bot.send_message(call.message.chat.id, f"❌ Xato: {e}")
+
 
         
 @bot.message_handler(func=lambda m: m.text == "📥 Zaxira tiklash")
