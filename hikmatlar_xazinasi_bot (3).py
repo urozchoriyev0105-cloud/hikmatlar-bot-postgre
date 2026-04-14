@@ -835,8 +835,9 @@ def confirm_restore(call):
         )
 
     except Exception as e:
-        bot.answer_callback_query(call.id, "❌ Xato")
-        print(e)
+    bot.send_message(call.message.chat.id, f"❌ Xato: {e}")
+    print(e)
+     
         
 @bot.message_handler(func=lambda m: m.text == "📥 Zaxira tiklash")
 def restore_menu(message):
