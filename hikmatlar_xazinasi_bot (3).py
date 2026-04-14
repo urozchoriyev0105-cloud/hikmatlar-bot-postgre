@@ -767,19 +767,32 @@ def send_db_file_button(message):
 def confirm_restore(call):
     try:
         import csv
+        import os
+
+        # Fayl borligini tekshirish
+        if not os.path.exists("temp_restore.csv"):
+            bot.answer_callback_query(call.id, "❌ Tiklash uchun fayl topilmadi!")
+            return
 
         conn = get_db_connection()
         cursor = conn.cursor()
 
         with open("temp_restore.csv", 'r', encoding='utf-8') as f:
             reader = csv.reader(f)
-            next(reader, None)  # HEADER skip
-
+            
+            # Har bir qatorni birma-bir tahlil qilamiz
             for row in reader:
-                if not row:
+                # Bo'sh qator yoki noto'g'ri format bo'lsa tashlab ketamiz
+                if not row or len(row) < 2:
+                    continue
+                
+                # DIQQAT: row[1] (ID) raqam bo'lmasa, bu sarlavha (header). 
+                # Shuning uchun uni tashlab ketamiz (Aynan shu joy user_id xatosini oldini oladi)
+                if not str(row[1]).replace('-', '').isdigit():
                     continue
 
                 try:
+                    # USERS JADVALINI TIKLASH
                     if row[0] == 'users':
                         cursor.execute("""
                             INSERT INTO users (
@@ -800,13 +813,17 @@ def confirm_restore(call):
                             row[2] or "",
                             row[3] or "",
                             row[4] or "",
-                            row[5] or None,
+                            row[5] or "07:00",
                             int(row[6]) if row[6].isdigit() else 0,
                             int(row[7]) if row[7].isdigit() else 0,
                             int(row[8]) if row[8].isdigit() else 0
                         ))
 
+                    # HIKMATLAR JADVALINI TIKLASH
                     elif row[0] == 'hikmatlar':
+                        # public_id ba'zan None bo'lishi mumkin
+                        p_id = int(row[5]) if len(row) > 5 and row[5] and row[5].isdigit() else None
+                        
                         cursor.execute("""
                             INSERT INTO hikmatlar (id, secret_id, status, is_posted_to_channel, public_id)
                             VALUES (%s,%s,%s,%s,%s)
@@ -819,46 +836,48 @@ def confirm_restore(call):
                             int(row[2]),
                             row[3],
                             int(row[4]) if row[4].isdigit() else 0,
-                            int(row[5]) if row[5].isdigit() else None
+                            p_id
                         ))
 
+                    # RANDOM LIMITLARNI TIKLASH
                     elif row[0] == 'random_limits':
                         cursor.execute("""
                             INSERT INTO random_limits (user_id, last_key)
                             VALUES (%s,%s)
-                            ON CONFLICT DO NOTHING
-                        """, (
-                            int(row[1]),
-                            row[2]
-                        ))
+                            ON CONFLICT (user_id) DO NOTHING
+                        """, (int(row[1]), row[2]))
 
+                    # KO'RILGAN HIKMATLARNI TIKLASH
                     elif row[0] == 'seen_hikmatlar':
                         cursor.execute("""
                             INSERT INTO seen_hikmatlar (user_id, hikmat_id)
                             VALUES (%s,%s)
                             ON CONFLICT DO NOTHING
-                        """, (
-                            int(row[1]),
-                            int(row[2])
-                        ))
+                        """, (int(row[1]), int(row[2])))
 
                 except Exception as row_error:
-                    print("ROW ERROR:", row, row_error)
+                    print(f"⚠️ Qatorda xatolik: {row} -> {row_error}")
                     continue
 
         conn.commit()
         cursor.close()
         conn.close()
 
+        # Vaqtinchalik faylni o'chirib tashlaymiz
+        if os.path.exists("temp_restore.csv"):
+            os.remove("temp_restore.csv")
+
         bot.edit_message_text(
-            "✅ TO‘LIQ tiklandi!",
+            "✅ **TO‘LIQ TIKLANDI!**\n\nBarcha foydalanuvchilar, hikmatlar va statistika muvaffaqiyatli qayta tiklandi.",
             call.message.chat.id,
-            call.message.message_id
+            call.message.message_id,
+            parse_mode="Markdown"
         )
 
     except Exception as e:
-        bot.send_message(call.message.chat.id, f"❌ Xato: {e}")
-        print(e)
+        bot.send_message(call.message.chat.id, f"❌ Umumiy xatolik yuz berdi: {e}")
+        print(f"Kritik xato: {e}")
+
         
 @bot.message_handler(func=lambda m: m.text == "📥 Zaxira tiklash")
 def restore_menu(message):
