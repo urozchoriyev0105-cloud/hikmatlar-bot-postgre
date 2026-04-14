@@ -762,66 +762,89 @@ def send_db_file_button(message):
 
     except Exception as e:
         bot.send_message(message.chat.id, f"❌ Xato: {e}")  
+
 @bot.callback_query_handler(func=lambda call: call.data == "confirm_restore")
 def confirm_restore(call):
     try:
         import csv
+
         conn = get_db_connection()
         cursor = conn.cursor()
 
         with open("temp_restore.csv", 'r', encoding='utf-8') as f:
             reader = csv.reader(f)
+            next(reader, None)  # HEADER skip
 
             for row in reader:
                 if not row:
                     continue
 
-                if row[0] == 'users':
-                    cursor.execute("""
-                        INSERT INTO users (
-                            user_id, first_name, username, phone,
-                            time1, last_sent_index, daily_count, random_count
-                        )
-                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
-                        ON CONFLICT (user_id) DO UPDATE SET
-                            first_name=EXCLUDED.first_name,
-                            username=EXCLUDED.username,
-                            phone=EXCLUDED.phone,
-                            time1=EXCLUDED.time1,
-                            last_sent_index=EXCLUDED.last_sent_index,
-                            daily_count=EXCLUDED.daily_count,
-                            random_count=EXCLUDED.random_count
-                    """, (
-                        int(row[1]), row[2], row[3], row[4],
-                        row[5], int(row[6]), int(row[7]), int(row[8])
-                    ))
+                try:
+                    if row[0] == 'users':
+                        cursor.execute("""
+                            INSERT INTO users (
+                                user_id, first_name, username, phone,
+                                time1, last_sent_index, daily_count, random_count
+                            )
+                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                            ON CONFLICT (user_id) DO UPDATE SET
+                                first_name=EXCLUDED.first_name,
+                                username=EXCLUDED.username,
+                                phone=EXCLUDED.phone,
+                                time1=EXCLUDED.time1,
+                                last_sent_index=EXCLUDED.last_sent_index,
+                                daily_count=EXCLUDED.daily_count,
+                                random_count=EXCLUDED.random_count
+                        """, (
+                            int(row[1]),
+                            row[2] or "",
+                            row[3] or "",
+                            row[4] or "",
+                            row[5] or None,
+                            int(row[6]) if row[6].isdigit() else 0,
+                            int(row[7]) if row[7].isdigit() else 0,
+                            int(row[8]) if row[8].isdigit() else 0
+                        ))
 
-                elif row[0] == 'hikmatlar':
-                    cursor.execute("""
-                        INSERT INTO hikmatlar (id, secret_id, status, is_posted_to_channel, public_id)
-                        VALUES (%s,%s,%s,%s,%s)
-                        ON CONFLICT (id) DO UPDATE SET
-                            status=EXCLUDED.status,
-                            is_posted_to_channel=EXCLUDED.is_posted_to_channel,
-                            public_id=EXCLUDED.public_id
-                    """, (
-                        int(row[1]), int(row[2]), row[3],
-                        int(row[4]), int(row[5]) if row[5] else None
-                    ))
+                    elif row[0] == 'hikmatlar':
+                        cursor.execute("""
+                            INSERT INTO hikmatlar (id, secret_id, status, is_posted_to_channel, public_id)
+                            VALUES (%s,%s,%s,%s,%s)
+                            ON CONFLICT (id) DO UPDATE SET
+                                status=EXCLUDED.status,
+                                is_posted_to_channel=EXCLUDED.is_posted_to_channel,
+                                public_id=EXCLUDED.public_id
+                        """, (
+                            int(row[1]),
+                            int(row[2]),
+                            row[3],
+                            int(row[4]) if row[4].isdigit() else 0,
+                            int(row[5]) if row[5].isdigit() else None
+                        ))
 
-                elif row[0] == 'random_limits':
-                    cursor.execute("""
-                        INSERT INTO random_limits (user_id, last_key)
-                        VALUES (%s,%s)
-                        ON CONFLICT DO NOTHING
-                    """, (int(row[1]), row[2]))
+                    elif row[0] == 'random_limits':
+                        cursor.execute("""
+                            INSERT INTO random_limits (user_id, last_key)
+                            VALUES (%s,%s)
+                            ON CONFLICT DO NOTHING
+                        """, (
+                            int(row[1]),
+                            row[2]
+                        ))
 
-                elif row[0] == 'seen_hikmatlar':
-                    cursor.execute("""
-                        INSERT INTO seen_hikmatlar (user_id, hikmat_id)
-                        VALUES (%s,%s)
-                        ON CONFLICT DO NOTHING
-                    """, (int(row[1]), int(row[2])))
+                    elif row[0] == 'seen_hikmatlar':
+                        cursor.execute("""
+                            INSERT INTO seen_hikmatlar (user_id, hikmat_id)
+                            VALUES (%s,%s)
+                            ON CONFLICT DO NOTHING
+                        """, (
+                            int(row[1]),
+                            int(row[2])
+                        ))
+
+                except Exception as row_error:
+                    print("ROW ERROR:", row, row_error)
+                    continue
 
         conn.commit()
         cursor.close()
@@ -836,7 +859,6 @@ def confirm_restore(call):
     except Exception as e:
         bot.send_message(call.message.chat.id, f"❌ Xato: {e}")
         print(e)
-     
         
 @bot.message_handler(func=lambda m: m.text == "📥 Zaxira tiklash")
 def restore_menu(message):
