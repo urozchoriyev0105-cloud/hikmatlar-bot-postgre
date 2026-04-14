@@ -854,7 +854,7 @@ def handle_restore(message):
         bot.reply_to(message, "✅ FULL tiklandi!")
 
     except Exception as e:
-        bot.reply_to(message, f"❌ Xato: {e}"). 
+        bot.reply_to(message, f"❌ Xato: {e}")
         
 @bot.message_handler(func=lambda m: m.text == "📥 Zaxira tiklash")
 def restore_menu(message):
