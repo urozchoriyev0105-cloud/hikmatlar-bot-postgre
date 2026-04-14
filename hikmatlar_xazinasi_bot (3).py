@@ -257,8 +257,9 @@ def admin_panel(message):
 def admin_keyboard():
     markup = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
     markup.add("➕ Hikmat qo'shish", "📝 Navbatni boshqarish")
-    markup.add("📊 Statistika", "📢 Xabar yuborish")
-    markup.add("📂 Bazani yuklab olish", "⬅️ Orqaga")
+    markup.add("📊 Statistika", "📢 Xabar yuborish") 
+    markup.add("🏆 TOP Random","📂 Bazani yuklab olish")
+    markup.add("⬅️ Orqaga")
     return markup
 
 
@@ -555,7 +556,67 @@ def show_stats(message):
     except Exception as e:
         bot.send_message(message.chat.id, f"❌ Xato: {e}")
 
+@bot.message_handler(func=lambda m: m.text == "🏆 TOP Random")
+def top_hikmatlar_admin(message):
+    if message.from_user.id != ADMIN_ID:
+        return
 
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT id, public_id, random_count 
+            FROM hikmatlar
+            WHERE is_posted_to_channel = 1
+            ORDER BY random_count DESC
+            LIMIT 10
+        """)
+        rows = cursor.fetchall()
+        conn.close()
+
+        if not rows:
+            bot.send_message(message.chat.id, "❌ TOP Random hikmatlar yo‘q")
+            return
+
+        text = "🏆 <b>TOP 10 RANDOM HIKMAT</b>\n\n"
+        markup = types.InlineKeyboardMarkup)
+
+        for i, (hid, pub_id, count) in enumerate(rows, 1):
+
+            text += f"{i}) Hikmat #{hid} — {count} marta\n"
+
+            if pub_id:
+                # ✅ NORMAL LINK
+                link = f"https://t.me/hikmatlar_xazinasi_tg/{pub_id}"
+
+                markup.add(
+                    types.InlineKeyboardButton(
+                        text=f"{i}-ochish",
+                        url=link
+                    )
+                )
+            else:
+                # ❌ KANALDA YO‘Q
+                text += "   ❌ (kanalda yo‘q)\n"
+
+                # 🔥 AUTO FIX TUGMA
+                markup.add(
+                    types.InlineKeyboardButton(
+                        text=f"{i}-qayta tiklash 🔄",
+                        callback_data=f"fix_{hid}"
+                    )
+                )
+
+        bot.send_message(
+            message.chat.id,
+            text,
+            parse_mode="HTML",
+            reply_markup=markup
+        )
+
+    except Exception as e:
+        bot.send_message(message.chat.id, f"❌ Xato: {e}")
 # --- O‘CHIRISH ---
 @bot.callback_query_handler(func=lambda call: call.data.startswith("sql_del_"))
 def delete_sql_hikmat(call):
@@ -575,6 +636,52 @@ def delete_sql_hikmat(call):
     except Exception as e:
         bot.answer_callback_query(call.id, "❌ Xato") 
 
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("fix_"))
+def fix_hikmat(call):
+    if call.from_user.id != ADMIN_ID:
+        return
+
+    hikmat_id = int(call.data.split("_")[1])
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # 🔍 secret_id olish
+        cursor.execute(
+            "SELECT secret_id FROM hikmatlar WHERE id = %s",
+            (hikmat_id,)
+        )
+        res = cursor.fetchone()
+
+        if not res:
+            bot.answer_callback_query(call.id, "❌ Topilmadi")
+            return
+
+        secret_id = res[0]
+
+        # 📤 qayta arxivga tashlash
+        sent_msg = bot.copy_message(
+            ARCHIVE_CHANNEL_ID,
+            SECRET_STORAGE_ID,
+            secret_id,
+            disable_notification=True
+        )
+
+        # ✅ DB update
+        cursor.execute(
+            "UPDATE hikmatlar SET public_id = %s WHERE id = %s",
+            (sent_msg.message_id, hikmat_id)
+        )
+        conn.commit()
+        conn.close()
+
+        bot.answer_callback_query(call.id, "✅ Qayta tiklandi")
+
+    except Exception as e:
+        print(f"Fix error: {e}")
+        bot.answer_callback_query(call.id, "❌ Xato")
 @bot.message_handler(func=lambda m: m.text == "➕ Hikmat qo'shish" and m.from_user.id == ADMIN_ID)
 def add_h(message):
     msg = bot.send_message(message.chat.id, "✍️ Postni yuboring:")
