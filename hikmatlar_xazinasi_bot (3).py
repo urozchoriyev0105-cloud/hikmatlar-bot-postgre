@@ -762,7 +762,6 @@ def send_db_file_button(message):
 
     except Exception as e:
         bot.send_message(message.chat.id, f"❌ Xato: {e}")  
-
 @bot.callback_query_handler(func=lambda call: call.data == "confirm_restore")
 def confirm_restore(call):
     try:
@@ -802,9 +801,9 @@ def confirm_restore(call):
                         INSERT INTO hikmatlar (id, secret_id, status, is_posted_to_channel, public_id)
                         VALUES (%s,%s,%s,%s,%s)
                         ON CONFLICT (id) DO UPDATE SET
-                        status=EXCLUDED.status,
-                        is_posted_to_channel=EXCLUDED.is_posted_to_channel,
-                        public_id=EXCLUDED.public_id
+                            status=EXCLUDED.status,
+                            is_posted_to_channel=EXCLUDED.is_posted_to_channel,
+                            public_id=EXCLUDED.public_id
                     """, (
                         int(row[1]), int(row[2]), row[3],
                         int(row[4]), int(row[5]) if row[5] else None
@@ -835,8 +834,8 @@ def confirm_restore(call):
         )
 
     except Exception as e:
-    bot.send_message(call.message.chat.id, f"❌ Xato: {e}")
-    print(e)
+        bot.send_message(call.message.chat.id, f"❌ Xato: {e}")
+        print(e)
      
         
 @bot.message_handler(func=lambda m: m.text == "📥 Zaxira tiklash")
