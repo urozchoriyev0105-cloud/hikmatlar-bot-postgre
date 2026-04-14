@@ -365,7 +365,43 @@ def check_callback(call):
     else:
         bot.answer_callback_query(call.id, "❌ Siz hali a'zo bo'lmadingiz!", show_alert=True)
 
+@bot.message_handler(commands=['debug'])
+def admin_debug(message):
+    if message.from_user.id != ADMIN_ID:
+        return
 
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # 📌 Oxirgi 5 ta arxiv
+        cursor.execute("""
+            SELECT id, public_id 
+            FROM hikmatlar 
+            WHERE is_posted_to_channel = 1
+            ORDER BY id DESC
+            LIMIT 5
+        """)
+        rows = cursor.fetchall()
+        conn.close()
+
+        if not rows:
+            bot.send_message(message.chat.id, "❌ Arxiv yo‘q")
+            return
+
+        text = "🔐 <b>OXIRGI 5 TA ARXIV</b>\n\n"
+
+        for i, (hid, pub_id) in enumerate(rows, 1):
+            # 🔗 LINK (kanal username bo‘lishi kerak)
+            link = f"https://t.me/hikmatlar_xazinasi_tg/{pub_id}"
+
+            text += f"{i}) ID: {hid}\n"
+            text += f"🔗 <a href='{link}'>Xabarni ochish</a>\n\n"
+
+        bot.send_message(message.chat.id, text, parse_mode="HTML")
+
+    except Exception as e:
+        bot.send_message(message.chat.id, f"❌ Xato: {e}")
            
 @bot.message_handler(func=lambda m: m.text == "📝 Navbatni boshqarish" and m.from_user.id == ADMIN_ID)
 def manage_queue(message):
