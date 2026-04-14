@@ -75,7 +75,9 @@ cursor.execute('''CREATE TABLE IF NOT EXISTS hikmatlar (
     status TEXT DEFAULT 'queue',
     is_posted_to_channel INTEGER DEFAULT 0,
     public_id INTEGER
-)''')
+)''') 
+
+cursor.execute("ALTER TABLE hikmatlar ADD COLUMN IF NOT EXISTS random_count INTEGER DEFAULT 0")
 
 cursor.execute('''CREATE TABLE IF NOT EXISTS random_limits (
     user_id BIGINT,
@@ -555,7 +557,6 @@ def show_stats(message):
 
     except Exception as e:
         bot.send_message(message.chat.id, f"❌ Xato: {e}")
-
 @bot.message_handler(func=lambda m: m.text == "🏆 TOP Random")
 def top_hikmatlar_admin(message):
     if message.from_user.id != ADMIN_ID:
@@ -579,7 +580,7 @@ def top_hikmatlar_admin(message):
             bot.send_message(message.chat.id, "❌ TOP Random hikmatlar yo‘q")
             return
 
-        text = "🏆 <b>TOP 10 RANDOM HIKMAT</b>\n\n"
+        text = "🏆 <b>TOP 10 RANDOM HIKMATLAR</b>\n\n"
         markup = types.InlineKeyboardMarkup()
 
         for i, (hid, pub_id, count) in enumerate(rows, 1):
@@ -587,7 +588,6 @@ def top_hikmatlar_admin(message):
             text += f"{i}) Hikmat #{hid} — {count} marta\n"
 
             if pub_id:
-                # ✅ NORMAL LINK
                 link = f"https://t.me/hikmatlar_xazinasi_tg/{pub_id}"
 
                 markup.add(
@@ -597,10 +597,6 @@ def top_hikmatlar_admin(message):
                     )
                 )
             else:
-                # ❌ KANALDA YO‘Q
-                text += "   ❌ (kanalda yo‘q)\n"
-
-                # 🔥 AUTO FIX TUGMA
                 markup.add(
                     types.InlineKeyboardButton(
                         text=f"{i}-qayta tiklash 🔄",
@@ -617,6 +613,7 @@ def top_hikmatlar_admin(message):
 
     except Exception as e:
         bot.send_message(message.chat.id, f"❌ Xato: {e}")
+
 # --- O‘CHIRISH ---
 @bot.callback_query_handler(func=lambda call: call.data.startswith("sql_del_"))
 def delete_sql_hikmat(call):
@@ -636,7 +633,6 @@ def delete_sql_hikmat(call):
     except Exception as e:
         bot.answer_callback_query(call.id, "❌ Xato") 
 
-
 @bot.callback_query_handler(func=lambda call: call.data.startswith("fix_"))
 def fix_hikmat(call):
     if call.from_user.id != ADMIN_ID:
@@ -648,7 +644,6 @@ def fix_hikmat(call):
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # 🔍 secret_id olish
         cursor.execute(
             "SELECT secret_id FROM hikmatlar WHERE id = %s",
             (hikmat_id,)
@@ -661,7 +656,6 @@ def fix_hikmat(call):
 
         secret_id = res[0]
 
-        # 📤 qayta arxivga tashlash
         sent_msg = bot.copy_message(
             ARCHIVE_CHANNEL_ID,
             SECRET_STORAGE_ID,
@@ -669,7 +663,6 @@ def fix_hikmat(call):
             disable_notification=True
         )
 
-        # ✅ DB update
         cursor.execute(
             "UPDATE hikmatlar SET public_id = %s WHERE id = %s",
             (sent_msg.message_id, hikmat_id)
@@ -679,9 +672,9 @@ def fix_hikmat(call):
 
         bot.answer_callback_query(call.id, "✅ Qayta tiklandi")
 
-    except Exception as e:
-        print(f"Fix error: {e}")
-        bot.answer_callback_query(call.id, "❌ Xato")
+    except:
+        bot.answer_callback_query(call.id, "❌ Xato") 
+        
 @bot.message_handler(func=lambda m: m.text == "➕ Hikmat qo'shish" and m.from_user.id == ADMIN_ID)
 def add_h(message):
     msg = bot.send_message(message.chat.id, "✍️ Postni yuboring:")
