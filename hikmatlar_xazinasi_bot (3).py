@@ -10,19 +10,21 @@ from flask import Flask
 from threading import Thread 
 from db_update import update_db 
 import csv 
-import psutil
+import psutil 
+try:
+    import psutil
+except:
+    psutil = None
 
 def get_system_stats():
+    if psutil is None:
+        return "N/A", "N/A"
+
+    import os
     process = psutil.Process(os.getpid())
-
-    # RAM (MB da)
     ram = process.memory_info().rss / 1024 / 1024
-
-    # CPU %
     cpu = psutil.cpu_percent(interval=1)
-
     return round(ram, 2), cpu
-
 app = Flask(__name__)
 
 @app.route('/')
