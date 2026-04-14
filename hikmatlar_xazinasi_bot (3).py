@@ -763,27 +763,14 @@ def send_db_file_button(message):
     except Exception as e:
         bot.send_message(message.chat.id, f"❌ Xato: {e}")  
 
-@bot.message_handler(content_types=['document'])
-def handle_restore(message):
-    if message.from_user.id != ADMIN_ID:
-        return
-
-    if not message.document.file_name.endswith('.csv'):
-        bot.reply_to(message, "❌ Faqat .csv fayl yuboring")
-        return
-
+@bot.callback_query_handler(func=lambda call: call.data == "confirm_restore")
+def confirm_restore(call):
     try:
-        file_info = bot.get_file(message.document.file_id)
-        downloaded_file = bot.download_file(file_info.file_path)
-
-        with open("restore.csv", 'wb') as f:
-            f.write(downloaded_file)
-
         import csv
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        with open("restore.csv", 'r', encoding='utf-8') as f:
+        with open("temp_restore.csv", 'r', encoding='utf-8') as f:
             reader = csv.reader(f)
 
             for row in reader:
@@ -806,14 +793,8 @@ def handle_restore(message):
                             daily_count=EXCLUDED.daily_count,
                             random_count=EXCLUDED.random_count
                     """, (
-                        int(row[1]),
-                        row[2],
-                        row[3],
-                        row[4],
-                        row[5],
-                        int(row[6]),
-                        int(row[7]),
-                        int(row[8])
+                        int(row[1]), row[2], row[3], row[4],
+                        row[5], int(row[6]), int(row[7]), int(row[8])
                     ))
 
                 elif row[0] == 'hikmatlar':
@@ -825,12 +806,9 @@ def handle_restore(message):
                         is_posted_to_channel=EXCLUDED.is_posted_to_channel,
                         public_id=EXCLUDED.public_id
                     """, (
-                        int(row[1]),
-                        int(row[2]),
-                        row[3],
-                        int(row[4]),
-                        int(row[5]) if row[5] else None
-                    ))  # <-- SHU YERDA YOPISH YETISHMAYOTGAN EDI
+                        int(row[1]), int(row[2]), row[3],
+                        int(row[4]), int(row[5]) if row[5] else None
+                    ))
 
                 elif row[0] == 'random_limits':
                     cursor.execute("""
@@ -844,17 +822,21 @@ def handle_restore(message):
                         INSERT INTO seen_hikmatlar (user_id, hikmat_id)
                         VALUES (%s,%s)
                         ON CONFLICT DO NOTHING
-                    """, (int(row[1]), int(row[2])))
+                    """, (int(row[1]), int(row[2]))
 
         conn.commit()
         cursor.close()
         conn.close()
-        os.remove("restore.csv")
 
-        bot.reply_to(message, "✅ FULL tiklandi!")
+        bot.edit_message_text(
+            "✅ TO‘LIQ tiklandi!",
+            call.message.chat.id,
+            call.message.message_id
+        )
 
     except Exception as e:
-        bot.reply_to(message, f"❌ Xato: {e}")
+        bot.answer_callback_query(call.id, "❌ Xato")
+        print(e)
         
 @bot.message_handler(func=lambda m: m.text == "📥 Zaxira tiklash")
 def restore_menu(message):
@@ -864,8 +846,19 @@ def restore_menu(message):
     bot.send_message(
         message.chat.id,
         "📤 Iltimos, .csv zaxira faylni yuboring.\n\n⚠️ Bu amal bazani o‘zgartiradi!"
-    )
+    ) 
 
+@bot.callback_query_handler(func=lambda call: call.data == "cancel_restore")
+def cancel_restore(call):
+    try:
+        bot.edit_message_text(
+            "❌ Tiklash bekor qilindi",
+            call.message.chat.id,
+            call.message.message_id
+        )
+    except:
+        bot.answer_callback_query(call.id, "Bekor qilindi")  
+        
 @bot.message_handler(func=lambda m: m.text == "📢 Xabar yuborish")
 def start_broadcast(message):
     if message.from_user.id != ADMIN_ID:
