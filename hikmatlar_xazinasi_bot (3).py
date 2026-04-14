@@ -633,47 +633,7 @@ def delete_sql_hikmat(call):
     except Exception as e:
         bot.answer_callback_query(call.id, "❌ Xato") 
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith("fix_"))
-def fix_hikmat(call):
-    if call.from_user.id != ADMIN_ID:
-        return
 
-    hikmat_id = int(call.data.split("_")[1])
-
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        cursor.execute(
-            "SELECT secret_id FROM hikmatlar WHERE id = %s",
-            (hikmat_id,)
-        )
-        res = cursor.fetchone()
-
-        if not res:
-            bot.answer_callback_query(call.id, "❌ Topilmadi")
-            return
-
-        secret_id = res[0]
-
-        sent_msg = bot.copy_message(
-            ARCHIVE_CHANNEL_ID,
-            SECRET_STORAGE_ID,
-            secret_id,
-            disable_notification=True
-        )
-
-        cursor.execute(
-            "UPDATE hikmatlar SET public_id = %s WHERE id = %s",
-            (sent_msg.message_id, hikmat_id)
-        )
-        conn.commit()
-        conn.close()
-
-        bot.answer_callback_query(call.id, "✅ Qayta tiklandi")
-
-    except:
-        bot.answer_callback_query(call.id, "❌ Xato") 
         
 @bot.message_handler(func=lambda m: m.text == "➕ Hikmat qo'shish" and m.from_user.id == ADMIN_ID)
 def add_h(message):
