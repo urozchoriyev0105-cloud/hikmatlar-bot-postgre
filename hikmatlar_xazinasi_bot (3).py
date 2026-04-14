@@ -822,7 +822,7 @@ def confirm_restore(call):
                         INSERT INTO seen_hikmatlar (user_id, hikmat_id)
                         VALUES (%s,%s)
                         ON CONFLICT DO NOTHING
-                    """, (int(row[1]), int(row[2]))
+                    """, (int(row[1]), int(row[2])))
 
         conn.commit()
         cursor.close()
